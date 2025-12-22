@@ -17,9 +17,10 @@ import os
 
 from typing import Dict, Tuple, List, Callable, Final, Optional, Any, Union
 
-from src.utilities.screen_utils import getDpi, getResolution
 from src.storage.datatypes import SessionData, Agenda, Event, Task, TasksStore, RawSequence
 from src.storage.datatypes import ENGLISH_SHORT_DAYS, ITALIAN_DAYS, ENGLISH_TO_ITALIAN_DAYS, ENGLISH_TO_ITALIAN_MONTHS, ITALIAN_ORDINAL_NUMBERS
+from src.utilities.screen_profiler import getScreenInfo
+from src.utilities.fonts_scaler import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
 from src.algorithm import InputTransformer
 from src.algorithm.scheduler import Scheduler
 from src.exceptions.exceptions import ScheduleError
@@ -27,31 +28,31 @@ from src.exceptions.exceptions import ScheduleError
 THEME: Final[str] = "pulse"
 
 class Screen:
-    def __init__(self):
-        print(getResolution())
-        self.dpi: Final[float] = getDpi(None)[0]
-        self.size: Tuple[int, int] = getResolution()
-        self.scaling: Final[float] = self.dpi/72
+    dpi: float
+    size: Tuple[int, int]
+    scaling: float
 
 class AppRoot:
     """A singleton-like root manager for ttkbootstrap applications."""
     _root: Union[None, ttk.Window]  = None
-    _screen: Screen = Screen()
 
     @classmethod
     def _initRoot(cls, theme:str = THEME, **kwargs):
         if os.name == "nt":  # Windows
             enable_high_dpi_awareness()
-            cls._root = ttk.Window(themename=theme, **kwargs, scaling=cls._screen.scaling)
+            cls._root = ttk.Window(themename=theme, **kwargs)
         else:
-            cls._root = ttk.Window(themename=theme, **kwargs, scaling=cls._screen.scaling)
+            cls._root = ttk.Window(themename=theme, **kwargs)
 
-        print("Tk (supposedly logical) width:", cls._root.winfo_screenwidth())
-        print("screeninfo width:", cls._screen.size[0])
-        print("tk scaling:", cls._root.tk.call("tk", "scaling"))
+        Screen.size = (cls._root.winfo_screenwidth(), cls._root.winfo_screenheight())
+        Screen.dpi = cls._root.winfo_fpixels('1i')
+        Screen.scaling = Screen.dpi / 72
 
-        cls._root.minsize(cls._screen.size[0] // 2, cls._screen.size[1] // 2)
+        cls._root.minsize(Screen.size[0] // 2, Screen.size[1] // 2)
         cls._root.resizable(True, True)
+        cls._root.tk.call("tk", "scaling", Screen.scaling)
+
+        Screen.dpi, Screen.size, Screen.scaling = getScreenInfo(cls._root)
 
     @classmethod
     def get_root(cls, theme: Optional[str] = THEME, **kwargs):
@@ -103,9 +104,8 @@ class Popup:
         self.closed = True
         self.window.destroy()
 
-class PopupMaster(Screen):
+class PopupMaster:
     def __init__(self, hideRoot = True):
-        super().__init__()
         if hideRoot: AppRoot.hide()  # keep root hidden during popups
 
         self.usernameVar = StringVar(value="")
@@ -202,8 +202,41 @@ Se vuoi, puoi segnalare questo errore su GitHub sul repository ufficiale: https:
 
 class UI(Screen):
     def __init__(self, session: SessionData, updater_callback: Any) -> None:
-        super().__init__()
         self.bottomPadding = 20
+
+        self.style = Style(theme=THEME)
+
+        specs = {
+            "task"   : ("Futura", 12),
+            "day"    : ("Futura", 12),
+            "utility": ("Futura", 12, "normal", "italic")
+        }
+
+        fonts = createFontsForStyle(AppRoot.get_root(), Screen.dpi, specs)
+
+        applyFontsToStyles(self.style, {
+            "task.danger.TButton"  : fonts["task"],
+            "task.warning.TButton" : fonts["task"],
+            "task.success.TButton" : fonts["task"],
+            "day.secondary.TButton": fonts["day"],
+            "day.primary.TButton"  : fonts["day"],
+            "day.info.TButton"     : fonts["day"],
+            "day.dark.TButton"     : fonts["day"],
+            "utility.info.TButton" : fonts["utility"]
+        })
+
+        applyOptionsToStyles(self.style, {
+            "task.danger.TButton"  : {"anchor": "w"},
+            "task.warning.TButton" : {"anchor": "w"},
+            "task.success.TButton" : {"anchor": "w"},
+            "day.secondary.TButton": {"anchor": "w"},
+            "day.primary.TButton"  : {"anchor": "w"},
+            "day.info.TButton"     : {"anchor": "w"},
+            "day.dark.TButton"     : {"anchor": "w"},
+            "utility.info.TButton" : {"anchor": "w"}
+        })
+
+        print(*sorted(self.style.tk.call("ttk::style", "names")), sep='\n')
 
         self.window = AppRoot.get_root()  # use shared root
         AppRoot.show()  # now reveal it
@@ -212,19 +245,8 @@ class UI(Screen):
 
         self.mainFrame = ttk.Frame(
             self.window,
-            bootstyle='light' # noqa
+            bootstyle='light'  # noqa
         )
-
-        self.style = Style(theme=THEME)
-
-        self.style.configure('task.danger.TButton',    font='-size 15 -family Futura', anchor='w')
-        self.style.configure('task.warning.TButton',   font='-size 15 -family Futura', anchor='w')
-        self.style.configure('task.success.TButton',   font='-size 15 -family Futura', anchor='w')
-        self.style.configure('day.info.TButton',       font='-size 28 -family Futura', anchor='w')
-        self.style.configure('day.dark.TButton',       font='-size 28 -family Futura', anchor='w')
-        self.style.configure('day.secondary.TButton',  font='-size 28 -family Futura', anchor='w')
-        self.style.configure('day.primary.TButton',    font='-size 28 -family Futura', anchor='w')
-        self.style.configure('utility.info.TButton',   font='-size 18 -family Futura', anchor='w')
 
         self.modes:  Tuple[str, str] = (
             "Visualizzazione compiti",
@@ -456,8 +478,8 @@ class UI(Screen):
         self.gridFrame = ScrolledFrame(
             self.mainFrame,
             autohide=True,
-            height=self.size[1] - 35 + (self.bottomPadding * 2),
-            # Leave space for the buttons (35 pixels) plus 20 pixels for their vertical padding (both above and under)
+            width=self.size[0],
+            height=self.size[1] - 35 + (self.bottomPadding * 2), # Leave space for the buttons (35 pixels) plus 20 pixels for their vertical padding (both above and under)
             bootstyle='light'
         )
         self.buttonsFrame = ttk.Frame(
@@ -631,24 +653,13 @@ class UI(Screen):
                         )
                         button.grid(row=i+1, column=0, padx=0, pady=2, sticky="nswe")
 
+                        #if uid == "507067": print(*[f"{p}: {repr(getattr(button, p))}" for p in dir(button)], sep="\n") # print all properties of the button for debugging
+
             startingDate+=timedelta(days=col+1) # noqa
 
         self.gridFrame.pack(fill='both', padx=15)
 
         self._saver(self._session)
-
-        self.window.update_idletasks()  # force layout, make winsfo_req accurate
-
-        print("root.winfo_width()      :", self.window.winfo_width())
-        print("root.winfo_reqwidth()   :", self.window.winfo_reqwidth())
-        print("root.winfo_screenwidth():", self.window.winfo_screenwidth())
-        print("tk scaling              :", self.window.tk.call("tk", "scaling"))
-
-        print("main_frame.winfo_reqwidth():", self.mainFrame.winfo_reqwidth())
-        print("main_frame.winfo_width()   :", self.mainFrame.winfo_width())
-
-        for child in self.mainFrame.winfo_children():
-            print(child, "reqw:", child.winfo_reqwidth(), "reqh:", child.winfo_reqheight())
 
     def schedule(self) -> None:
         cols = 7
