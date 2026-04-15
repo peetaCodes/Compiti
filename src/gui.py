@@ -1,7 +1,9 @@
+import tkinter
+
 import ttkbootstrap as ttk
-from ttkbootstrap.scrolled import ScrolledFrame, ScrolledText
+from ttkbootstrap.widgets.scrolled import ScrolledFrame, ScrolledText
 from ttkbootstrap.constants import *
-from ttkbootstrap.style import Style
+#from ttkbootstrap.style import Style
 from ttkbootstrap.utility import enable_high_dpi_awareness
 from tkinter import StringVar, IntVar, DoubleVar
 
@@ -11,7 +13,7 @@ import re
 from calendar import monthrange as last_day_of
 
 from os.path import exists
-from pathlib import Path
+#from pathlib import Path
 
 import os
 
@@ -19,11 +21,12 @@ from typing import Dict, Tuple, List, Callable, Final, Optional, Any, Union
 
 from src.storage.datatypes import SessionData, Agenda, Event, Task, TasksStore, RawSequence
 from src.storage.datatypes import ENGLISH_SHORT_DAYS, ITALIAN_DAYS, ENGLISH_TO_ITALIAN_DAYS, ENGLISH_TO_ITALIAN_MONTHS, ITALIAN_ORDINAL_NUMBERS
-from src.utilities.screen_profiler import getScreenInfo
-from src.utilities.fonts_scaler import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
+from src.system_utils.screen_profiler import getScreenInfo
+from src.system_utils.assets.fonts_scaler import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
 from src.algorithm import InputTransformer
 from src.algorithm.scheduler import Scheduler
 from src.exceptions.exceptions import ScheduleError
+from src.system_utils.assets import *
 
 THEME: Final[str] = "pulse"
 
@@ -47,6 +50,8 @@ class AppRoot:
         Screen.size = (cls._root.winfo_screenwidth(), cls._root.winfo_screenheight())
         Screen.dpi = cls._root.winfo_fpixels('1i')
         Screen.scaling = Screen.dpi / 72
+
+        print(Screen.size, Screen.dpi, Screen.scaling)
 
         cls._root.minsize(Screen.size[0] // 2, Screen.size[1] // 2)
         cls._root.resizable(True, True)
@@ -123,7 +128,7 @@ class PopupMaster:
 
         ttk.Label(popup.window, text="Inserisci le credenziali", font="futura 25 bold").pack(pady=20)
         ttk.Label(popup.window, text="""Le credenziali salvate risultano corrotte o eliminate.
-Re-inseriscile in modo che il programma possa salvarle""" if oldCredentialsCorrupted else """Dato che è la prima esecuzione del programma, devi inserire le tue credenziali di classe viva.
+Re-inseriscile in modo che il programma possa salvarle""" if oldCredentialsCorrupted else """Dato che è la prima esecuzione del programma, devi inserire le tue credenziali di Classeviva.
 Queste verranno usate per scaricare i compiti autonomamente. Verranno criptate per sicurezza""", font="futura 16", justify="center").pack(pady=10)
 
         ttk.Label(popup.window, text="Username:", font="futura 18", bootstyle=style).pack(pady=5) # noqa
@@ -204,17 +209,25 @@ class UI(Screen):
     def __init__(self, session: SessionData, updater_callback: Any) -> None:
         self.bottomPadding = 20
 
-        self.style = Style(theme=THEME)
+        self.window = AppRoot.get_root()  # use shared root
+        self.origStyle = self.window.style # "snapshot" of the root's <default> style before applying any changes (unless it auto-syncs with self.windw.style, IDK)
+        style = self.window.style # local style variable
 
         specs = {
-            "task"   : ("Futura", 12),
-            "day"    : ("Futura", 12),
-            "utility": ("Futura", 12, "normal", "italic")
+            "task"   : ("Futura", 1),
+            "day"    : ("Futura", 20, "bold"),
+            "utility": ("Futura", 3, "normal", "italic")
         }
 
         fonts = createFontsForStyle(AppRoot.get_root(), Screen.dpi, specs)
 
-        applyFontsToStyles(self.style, {
+        fonts["task_debug"] = tkinter.font.Font(
+            root=self.window,
+            family="Futura",
+            size=-40,  # 40 pixels; positive would mean points
+        )
+
+        applyFontsToStyles(style, {
             "task.danger.TButton"  : fonts["task"],
             "task.warning.TButton" : fonts["task"],
             "task.success.TButton" : fonts["task"],
@@ -225,7 +238,7 @@ class UI(Screen):
             "utility.info.TButton" : fonts["utility"]
         })
 
-        applyOptionsToStyles(self.style, {
+        applyOptionsToStyles(self.origStyle, {
             "task.danger.TButton"  : {"anchor": "w"},
             "task.warning.TButton" : {"anchor": "w"},
             "task.success.TButton" : {"anchor": "w"},
@@ -236,9 +249,25 @@ class UI(Screen):
             "utility.info.TButton" : {"anchor": "w"}
         })
 
-        print(*sorted(self.style.tk.call("ttk::style", "names")), sep='\n')
+        print("Futura in Tk?", "Futura" in tkinter.font.families(self.window))
+        print("available sample:", [f for f in tkinter.font.families(self.window) if "Fut" in f])
+        print("available fonts:", tkinter.font.families(self.window))
 
-        self.window = AppRoot.get_root()  # use shared root
+        print("style task.danger.TButton:")
+        task_font_name = style.lookup("task.danger.TButton", "font")
+        print(task_font_name)
+        print(tkinter.font.nametofont(task_font_name).actual())
+
+        print("style day.dark.TButton:")
+        day_font_name = style.lookup("day.dark.TButton", "font")
+        print(day_font_name)
+        print(tkinter.font.nametofont(day_font_name).actual())
+
+        print("style utility.info.TButton:")
+        utility_font_name = style.lookup("utility.info.TButton", "font")
+        print(utility_font_name)
+        print(tkinter.font.nametofont(utility_font_name).actual())
+
         AppRoot.show()  # now reveal it
 
         self.window.title("School-Week planner")
@@ -266,7 +295,7 @@ class UI(Screen):
 
         self.STATEMENT = r'(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ])' # A statement is any sequence of at least 20 characters (letters, numbers, spaces and common punctuation marks)
         self.ABBREVIATIONS = [
-            "Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Sr.", "Jr.", "St.",
+            "Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Prof.sa" "Sr.", "Jr.", "St.",
             "vs.", "etc.", "i.e.", "e.g.", "p.m.", "a.m.",
             "Es.", "Fig.", "Inc.", "Ltd.", "Co.",
             "Dott.", "Sig.", "Sig.ra", "S.p.A.",
@@ -508,8 +537,9 @@ class UI(Screen):
                 text="Crea programma",
                 command=self.preProcessSession,
                 style="utility.info.TButton",
-                state=ttk.DISABLED
+                state="disabled"
             )
+
             self.summit_button.pack(padx=15, side='right')
 
             self.buttonsFrame.pack(side='bottom', fill='x', pady=self.bottomPadding)
@@ -556,7 +586,7 @@ class UI(Screen):
         endingDelta  : int  = 7 - (ITALIAN_DAYS.index(ENGLISH_TO_ITALIAN_DAYS[endingDate.strftime("%a")])+1) # convert last  weekday from english short ("Mon") to italian full ("Lunedì"), then do a bunch of $hit to get the ending delta.
         days: Tuple[date, ...] = self.getDaysFromTo(staringDay=startingDate, endingDay=endingDate)
 
-        self.summit_button["state"] = ttk.DISABLED if not self._session.selectedDays else ttk.NORMAL
+        self.summit_button["state"] = "disabled" if not self._session.selectedDays else "normal"
 
         for child in self.gridFrame.winfo_children(): # remove any remains of previous cells
             child.destroy()
@@ -570,8 +600,7 @@ class UI(Screen):
             self.gridFrame.rowconfigure(i, weight=2)
 
         for col in range(cols):
-            ttk.Label(master=self.gridFrame, text=ITALIAN_DAYS[col], anchor=CENTER, font="Futura 22",
-                      bootstyle='inverse-dark').grid( # noqa
+            ttk.Label(master=self.gridFrame, text=ITALIAN_DAYS[col], anchor=CENTER, style="day.dark.TButton").grid(
                 row=0, column=col, sticky="we", padx=8, pady=4)
 
         for r in range(1, rows + 1):

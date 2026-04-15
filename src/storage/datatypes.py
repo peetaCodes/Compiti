@@ -308,7 +308,7 @@ class Agenda:
             )
         return store
 
-# --- Conversion utilities ---
+# --- Conversion system utils ---
 def _isInstanceOfAnnotation(value: Any, annotation) -> bool:
     if annotation is Any:
         return True

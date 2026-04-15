@@ -62,5 +62,5 @@ class Coder:
 if __name__ == '__main__':
     coder = Coder()
     password = "peeta"
-    path = Path("/Users/pietrobellizio/.config/school-scheduler_cvv/credentials.txt")
-    coder.decryptFile(path, password)
+    path = Path("/Users/pietrobellizio/PycharmProjects/EmailRelay/credentials.enc")
+    coder.encryptFile(path, password)

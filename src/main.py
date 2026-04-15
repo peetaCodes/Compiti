@@ -1,8 +1,9 @@
 from src.index import API
-from src.utilities.coder import Coder
+from storage.coder import Coder
 from src.storage.datatypes import SessionData, Credentials, TasksStore, Agenda, ENGLISH_SHORT_DAYS
 from src.storage.saver import MemoryStorage
 from src.gui import UI, PopupMaster, AppRoot
+from src.system_utils.assets import *
 
 from pathlib import Path
 from userpaths import get_local_appdata
@@ -20,7 +21,7 @@ class App(UI):
         self.coder = Coder()
         AppRoot.get_root(
             theme="pulse",
-            iconphoto="../assets/icon.png",
+            iconphoto=IMAGES_DIR / "icon.png",
         )
 
         #key = self.auth()
