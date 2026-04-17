@@ -1,9 +1,11 @@
-import tkinter
+"""
+NOTE: a single function in this module, `UI.schedule`, was generated with ChatGPT.
+I never intended to keep it as the final version of the function; it was and still is ment merely as a draft.
+"""
 
 import ttkbootstrap as ttk
 from ttkbootstrap.widgets.scrolled import ScrolledFrame, ScrolledText
 from ttkbootstrap.constants import *
-#from ttkbootstrap.style import Style
 from ttkbootstrap.utility import enable_high_dpi_awareness
 from tkinter import StringVar, IntVar, DoubleVar
 
@@ -13,56 +15,47 @@ import re
 from calendar import monthrange as last_day_of
 
 from os.path import exists
-#from pathlib import Path
+import platform
 
-import os
+from typing import Dict, Tuple, List, Callable, Final, Optional, Any, Literal
 
-from typing import Dict, Tuple, List, Callable, Final, Optional, Any, Union
-
-from src.storage.datatypes import SessionData, Agenda, Event, Task, TasksStore, RawSequence
-from src.storage.datatypes import ENGLISH_SHORT_DAYS, ITALIAN_DAYS, ENGLISH_TO_ITALIAN_DAYS, ENGLISH_TO_ITALIAN_MONTHS, ITALIAN_ORDINAL_NUMBERS
-from src.system_utils.screen_profiler import getScreenInfo
-from src.system_utils.assets.fonts_scaler import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
+from src.storage import Storage
+from src.storage.datatypes import Agenda, Event, Task, TasksStore, RawSequence
+from src.storage.datatypes import ENGLISH_SHORT_DAYS, ITALIAN_DAYS, ENGLISH_TO_ITALIAN_DAYS, ENGLISH_TO_ITALIAN_MONTHS, \
+    ITALIAN_ORDINAL_NUMBERS
+from src.system_utils.system_screen import getScreenInfo
+from src.system_utils.assets.fonts import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
 from src.algorithm import InputTransformer
 from src.algorithm.scheduler import Scheduler
 from src.exceptions.exceptions import ScheduleError
 from src.system_utils.assets import *
-
-THEME: Final[str] = "pulse"
-
-class Screen:
-    dpi: float
-    size: Tuple[int, int]
-    scaling: float
+from system_utils.system_screen import Screen
 
 class AppRoot:
     """A singleton-like root manager for ttkbootstrap applications."""
-    _root: Union[None, ttk.Window]  = None
+    _root: ttk.Window | None = None
 
     @classmethod
-    def _initRoot(cls, theme:str = THEME, **kwargs):
-        if os.name == "nt":  # Windows
+    def _initRoot(cls, **kwargs):
+        if platform.system() == "Windows":
             enable_high_dpi_awareness()
-            cls._root = ttk.Window(themename=theme, **kwargs)
-        else:
-            cls._root = ttk.Window(themename=theme, **kwargs)
 
-        Screen.size = (cls._root.winfo_screenwidth(), cls._root.winfo_screenheight())
-        Screen.dpi = cls._root.winfo_fpixels('1i')
-        Screen.scaling = Screen.dpi / 72
+        cls._root = ttk.Window(**kwargs)
 
-        print(Screen.size, Screen.dpi, Screen.scaling)
+        dpi, size, _ = getScreenInfo(cls._root)
+        tk_scaling = dpi / 72.0
 
-        cls._root.minsize(Screen.size[0] // 2, Screen.size[1] // 2)
+        Screen.set_metrics(dpi, size, tk_scaling)
+
+        cls._root.tk.call("tk", "scaling", tk_scaling)
+
+        cls._root.minsize(Screen.px(1280), Screen.px(720))
         cls._root.resizable(True, True)
-        cls._root.tk.call("tk", "scaling", Screen.scaling)
-
-        Screen.dpi, Screen.size, Screen.scaling = getScreenInfo(cls._root)
 
     @classmethod
-    def get_root(cls, theme: Optional[str] = THEME, **kwargs):
+    def get_root(cls, **kwargs):
         if cls._root is None:
-            cls._initRoot(theme, **kwargs)
+            cls._initRoot(**kwargs)
 
         return cls._root
 
@@ -82,10 +75,11 @@ class AppRoot:
             cls._root.destroy()
             cls._root = None
 
+
 class Popup:
     """Base popup handler that ensures a hidden root window exists."""
 
-    def __init__(self, title: str, size: Tuple[int, int] = (600, 400)): #
+    def __init__(self, title: str, size: Tuple[int, int] = (600, 400)):  #
         self.root = AppRoot.get_root()  # shared root
 
         # Create the popup as a Toplevel
@@ -110,7 +104,7 @@ class Popup:
         self.window.destroy()
 
 class PopupMaster:
-    def __init__(self, hideRoot = True):
+    def __init__(self, hideRoot=True):
         if hideRoot: AppRoot.hide()  # keep root hidden during popups
 
         self.usernameVar = StringVar(value="")
@@ -118,24 +112,25 @@ class PopupMaster:
         self.keyVar = StringVar(value="")
 
     @staticmethod
-    def popup(title:str = "Generic Popup", size: Tuple[int, int] = (800, 400)):
+    def popup(title: str = "Generic Popup", size: Tuple[int, int] = (800, 400)):
         popup = Popup(title=title, size=size)
 
-        return popup # return the popup instance for further use
+        return popup  # return the popup instance for further use
 
     def ask_credentials(self, oldCredentialsCorrupted: bool, style: str = "primary"):
         popup = self.popup("Inserimento credenziali (CVV)", size=(1000, 650))
 
-        ttk.Label(popup.window, text="Inserisci le credenziali", font="futura 25 bold").pack(pady=20)
+        ttk.Label(popup.window, text="Inserisci le credenziali", font="Punk 25 bold").pack(pady=Screen.px(20))
         ttk.Label(popup.window, text="""Le credenziali salvate risultano corrotte o eliminate.
 Re-inseriscile in modo che il programma possa salvarle""" if oldCredentialsCorrupted else """Dato che è la prima esecuzione del programma, devi inserire le tue credenziali di Classeviva.
-Queste verranno usate per scaricare i compiti autonomamente. Verranno criptate per sicurezza""", font="futura 16", justify="center").pack(pady=10)
+Queste verranno usate per scaricare i compiti autonomamente. Verranno criptate per sicurezza""", font="Punk 16",
+                  justify="center").pack(pady=Screen.px(10))
 
-        ttk.Label(popup.window, text="Username:", font="futura 18", bootstyle=style).pack(pady=5) # noqa
-        ttk.Entry(popup.window, textvariable=self.usernameVar).pack(pady=10)
-        ttk.Label(popup.window, text="Password:", font="futura 18", bootstyle=style).pack(pady=5) # noqa
-        ttk.Entry(popup.window, textvariable=self.passwordVar, show="*").pack(pady=10)
-        ttk.Button(popup.window, text="Submit", command=popup.close, bootstyle=style).pack(pady=10) # noqa
+        ttk.Label(popup.window, text="Username:", font="Punk 18", bootstyle=style).pack(pady=Screen.px(5))  # noqa
+        ttk.Entry(popup.window, textvariable=self.usernameVar).pack(pady=Screen.px(10))
+        ttk.Label(popup.window, text="Password:", font="Punk 18", bootstyle=style).pack(pady=Screen.px(5))  # noqa
+        ttk.Entry(popup.window, textvariable=self.passwordVar, show="*").pack(pady=Screen.px(10))
+        ttk.Button(popup.window, text="Submit", command=popup.close, bootstyle=style).pack(pady=Screen.px(10))  # noqa
 
         popup.show_modal()
         return self.usernameVar.get(), self.passwordVar.get()
@@ -145,14 +140,15 @@ Queste verranno usate per scaricare i compiti autonomamente. Verranno criptate p
 
         ttk.Label(
             popup.window,
-            text=("Inserisci una parola da usare come chiave per criptare le tue credenziali.\nLa dovrai inserire ogni volta che avvierai il programma.\nDeve essere un insieme di caratteri qualsiasi di qualunque lunghezza."
-                  if first_time else
-                  "Inserisci la chiave d'accesso per decriptare le credenziali"),
-            font="futura 16",
+            text=(
+                "Inserisci una parola da usare come chiave per criptare le tue credenziali.\nLa dovrai inserire ogni volta che avvierai il programma.\nDeve essere un insieme di caratteri qualsiasi di qualunque lunghezza."
+                if first_time else
+                "Inserisci la chiave d'accesso per decriptare le credenziali"),
+            style="dark.TLabel",
             justify="center",
-        ).pack(pady=20)
-        ttk.Entry(popup.window, textvariable=self.keyVar).pack(pady=10)
-        ttk.Button(popup.window, text="Submit", bootstyle=style, command=popup.close).pack(pady=10) # noqa
+        ).pack(pady=Screen.px(20))
+        ttk.Entry(popup.window, textvariable=self.keyVar).pack(pady=Screen.px(10))
+        ttk.Button(popup.window, text="Submit", bootstyle=style, command=popup.close).pack(pady=Screen.px(10))  # noqa
 
         popup.show_modal()
         return self.keyVar.get()
@@ -180,95 +176,70 @@ Queste verranno usate per scaricare i compiti autonomamente. Verranno criptate p
             return status, (username, password, key)
         return status, ("", "", key)
 
-    def showErrorPopup(self, message: str, tb: Optional[str] = None, size: Tuple[int, int] = (800, 400), title: str = "Errore"):
+    def showErrorPopup(
+            self, message: str,
+            tb: Optional[str] = None,
+            size: Tuple[int, int] = (800, 400),
+            title: str = "Errore"):
         popup = self.popup(size=size, title=title)
 
-        ttk.Label(popup.window, text="Si è verificato un errore imprevisto:", font="Futura 20 bold").pack(pady=10)
-        messageLabel = ttk.Label(popup.window, text=message, font="Inter 20 bold", bootstyle='danger') # noqa
-        messageLabel.pack(fill='x', padx=10, pady=10)
+        ttk.Label(
+            popup.window,
+            text="Si è verificato un errore imprevisto:",
+            font=Storage.session().preferences.fonts["err-title"]
+        ).pack(pady=Screen.px(10))
+
+        ttk.Label(
+            popup.window,
+            text=message,
+            font=Storage.session().preferences.fonts["err-title"],
+            bootstyle='danger'
+        ).pack(padx=Screen.px(10), pady=Screen.px(10))
 
         if tb:
-            ttk.Label(popup.window, text="Dettagli tecnici:", font="Futura 20 bold").pack(pady=10)
-            tracebackBox = ScrolledText(popup.window, font="Futura 16", autohide=True, hbar=True)
-            tracebackBox.insert(END, tb) # noqa
-            tracebackBox.pack(expand=True, fill='both', padx=10, pady=10)
+            ttk.Label(
+                popup.window,
+                text="Traceback (Dettagli tecnici):",
+                font=Storage.session().preferences.fonts["err-title"]
+            ).pack(pady=Screen.px(50))
 
-        infoLabel = ttk.Label(popup.window, text="""Cliccando su 'chiudi' ignorerai l'errore ed andrai avanti con il programma.
+            tracebackBox = ScrolledText(
+                popup.window,
+                font=Storage.session().preferences.fonts["err-body"],
+                autohide=True,
+                hbar=True,
+                width=Screen.px(Screen.size[0]),
+                height=Screen.px(Screen.size[1]//80),
+            )
+            tracebackBox.insert(END, tb)  # noqa
+            tracebackBox.pack(expand=False)
+
+        ttk.Label(
+            popup.window,
+            text="""Cliccando su 'Ignora' ignorerai l'errore ed andrai avanti con il programma.
 Il programma potrebbe chiudersi inavvertitamente oppure malfunzionare dopo questo errore.
 Se dopo aver chiuso questa finestra riscontrerai dei problemi, riavvia il programma.
 
-Se vuoi, puoi segnalare questo errore su GitHub sul repository ufficiale: https://github.com/peetaCodes/School-Week_Planner""", font="Futura 16 italic")
-        infoLabel.pack(pady=10, padx=20)
+Se vuoi, puoi segnalare questo errore su GitHub sul repository ufficiale: https://github.com/peetaCodes/Compiti""",
+            font=Storage.session().preferences.fonts["err-helper"],
+            anchor="center").pack(pady=Screen.px(10), padx=Screen.px(20))
 
-        ttk.Button(popup.window, text="Chiudi", command=popup.close, bootstyle="danger").pack(pady=10) # noqa
+        ttk.Button(
+            popup.window,
+            text="Ignora",
+            command=popup.close,
+            bootstyle="danger").pack(pady=Screen.px(10))
 
         popup.show_modal()
         return popup
 
+
 class UI(Screen):
-    def __init__(self, session: SessionData, updater_callback: Any) -> None:
-        self.bottomPadding = 20
+    def __init__(self) -> None:
+        self.bottomPadding = Screen.px(20)
 
         self.window = AppRoot.get_root()  # use shared root
-        self.origStyle = self.window.style # "snapshot" of the root's <default> style before applying any changes (unless it auto-syncs with self.windw.style, IDK)
-        style = self.window.style # local style variable
-
-        specs = {
-            "task"   : ("Futura", 1),
-            "day"    : ("Futura", 20, "bold"),
-            "utility": ("Futura", 3, "normal", "italic")
-        }
-
-        fonts = createFontsForStyle(AppRoot.get_root(), Screen.dpi, specs)
-
-        fonts["task_debug"] = tkinter.font.Font(
-            root=self.window,
-            family="Futura",
-            size=-40,  # 40 pixels; positive would mean points
-        )
-
-        applyFontsToStyles(style, {
-            "task.danger.TButton"  : fonts["task"],
-            "task.warning.TButton" : fonts["task"],
-            "task.success.TButton" : fonts["task"],
-            "day.secondary.TButton": fonts["day"],
-            "day.primary.TButton"  : fonts["day"],
-            "day.info.TButton"     : fonts["day"],
-            "day.dark.TButton"     : fonts["day"],
-            "utility.info.TButton" : fonts["utility"]
-        })
-
-        applyOptionsToStyles(self.origStyle, {
-            "task.danger.TButton"  : {"anchor": "w"},
-            "task.warning.TButton" : {"anchor": "w"},
-            "task.success.TButton" : {"anchor": "w"},
-            "day.secondary.TButton": {"anchor": "w"},
-            "day.primary.TButton"  : {"anchor": "w"},
-            "day.info.TButton"     : {"anchor": "w"},
-            "day.dark.TButton"     : {"anchor": "w"},
-            "utility.info.TButton" : {"anchor": "w"}
-        })
-
-        print("Futura in Tk?", "Futura" in tkinter.font.families(self.window))
-        print("available sample:", [f for f in tkinter.font.families(self.window) if "Fut" in f])
-        print("available fonts:", tkinter.font.families(self.window))
-
-        print("style task.danger.TButton:")
-        task_font_name = style.lookup("task.danger.TButton", "font")
-        print(task_font_name)
-        print(tkinter.font.nametofont(task_font_name).actual())
-
-        print("style day.dark.TButton:")
-        day_font_name = style.lookup("day.dark.TButton", "font")
-        print(day_font_name)
-        print(tkinter.font.nametofont(day_font_name).actual())
-
-        print("style utility.info.TButton:")
-        utility_font_name = style.lookup("utility.info.TButton", "font")
-        print(utility_font_name)
-        print(tkinter.font.nametofont(utility_font_name).actual())
-
-        AppRoot.show()  # now reveal it
+        self.style = self.window.style
 
         self.window.title("School-Week planner")
 
@@ -277,23 +248,20 @@ class UI(Screen):
             bootstyle='light'  # noqa
         )
 
-        self.modes:  Tuple[str, str] = (
+        self.modes: Tuple[str, str] = (
             "Visualizzazione compiti",
             "Visualizzazione programma"
         )
-        self.mode  : StringVar  = StringVar(value=self.modes[0])
+        self.mode: StringVar = StringVar(value=self.modes[0])
 
-        self._session: SessionData = session
-        self._saver: Any = updater_callback
+        self.selectedSchedule = None
 
         self.today = date.today()
-        self.year  = self.today.year
+        self.year = self.today.year
         self.month = self.today.month
-        self.day   = self.today.day
+        self.day = self.today.day
 
-        self.selectedSchedule: StringVar = StringVar(value=tuple(self._session.schedules.keys())[0] if self._session.schedules else "")
-
-        self.STATEMENT = r'(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ])' # A statement is any sequence of at least 20 characters (letters, numbers, spaces and common punctuation marks)
+        self.STATEMENT = r'(?<=[.!?])\s+(?=[A-ZÀ-ÖØ-Þ])'  # A statement is any sequence of at least 20 characters (letters, numbers, spaces and common punctuation marks)
         self.ABBREVIATIONS = [
             "Mr.", "Mrs.", "Ms.", "Dr.", "Prof.", "Prof.sa" "Sr.", "Jr.", "St.",
             "vs.", "etc.", "i.e.", "e.g.", "p.m.", "a.m.",
@@ -302,25 +270,29 @@ class UI(Screen):
             "Pag.", "Cap.", "Art."
         ]
 
-        self._initStage()
+        self.fonts = self.style_root()
+        self._updateStage(init=True)
 
     # Button-related functions
 
     def showAssignment(self, uid: str) -> None:
-        amountVar: IntVar = self._session.tasks.get(uid).effortVar
-        for e in self._session.agenda:
+        # none of the stuff in here ever gets scaled
+        amountVar: IntVar = Storage.session().tasks.get(uid).effortVar
+        for e in Storage.session().agenda:
             if e.id == int(uid):
                 event: Event = e
                 break
-        eventTime: str = self.normalizeMonth(event.startingTime.partition("T")[2].partition("+")[0]) if type(event.startingTime).__name__ != 'NoneType' else 'Tutta la giornata' # noqa
+        eventTime: str = self.normalizeMonth(event.startingTime.partition("T")[2].partition("+")[0]) if type(
+            event.startingTime).__name__ != 'NoneType' else 'Tutta la giornata'  # noqa
         eventDate: str = self.normalizeMonth(event.date.strftime("%d %b %Y"))
-        assignmentPopup = ttk.Toplevel(title=f"Compito del {eventDate}", size=(len(event.author)*15+1250, 750))
+        assignmentPopup = PopupMaster.popup(title=f"Compito del {eventDate}",
+                                            size=(round(Screen.size[0] * (7 / 8)), Screen.size[1] // 2)).window
 
         assignmentFrame = ttk.Frame(assignmentPopup)
-        ttk.Label       (assignmentFrame, text=f"{event.author} ha assegnato",  font="Futura 30 bold").pack(fill='x')
-        ttk.Label       (assignmentFrame, text=f"{eventDate}; {eventTime}\n",  font="Futura 22")     .pack(fill='x')
+        ttk.Label(assignmentFrame, text=f"{event.author} ha assegnato", font=self.fonts["ass-author"]).pack(fill='x')
+        ttk.Label(assignmentFrame, text=f"{eventDate}; {eventTime}\n", font=self.fonts["ass-subtitle"]).pack(fill='x')
 
-        body = ScrolledText(assignmentFrame, font="Futura 20", autohide=True, hbar=True)
+        body = ScrolledText(assignmentFrame, autohide=False, hbar=True, font=self.fonts["ass-body"])
         body.insert(END, self.processText(event.notes))  # noqa
         body.pack(expand=False, anchor="w")
 
@@ -328,52 +300,59 @@ class UI(Screen):
         effortEntry = ttk.Meter(
             effortFrame,
             bootstyle="primary",
-            metersize=450,
-            meterthickness=22,
-            padding=5,
+            metersize=Screen.px(450),
+            meterthickness=Screen.px(22),
+            padding=Screen.px(5),
 
             amountused=amountVar.get(),
             metertype="full",
             interactive=True,
             subtext="impegno",
-            subtextfont="-size 20 -family Futura -weight bold" # noqa
+            subtextfont=f"-size {Screen.px(20)} -family Punk -weight bold"  # noqa
         )
 
-        self._session.tasks.get(uid).effortVar = effortEntry.amountusedvar
-        self._saver(self._session)
+        Storage.session().tasks.get(uid).effortVar = effortEntry.amountusedvar
+        Storage.save()
 
         resetButton = ttk.Button(
             effortFrame,
             text="Reimposta impegno",
             command=lambda: effortEntry.configure(amountused=0),
-            bootstyle="primary" # noqa
+            bootstyle="primary"
         )
-        resetButton.pack(side='bottom', pady=10)
-        effortEntry.pack(side='left',   padx=10)
+        resetButton.pack(side='bottom', pady=Screen.px(10))
+        effortEntry.pack(side='left', padx=Screen.px(10))
 
         assignmentFrame.pack(side="left", fill='both', expand=True, anchor='w')
         effortFrame.pack(side="right", fill='y', expand=True, anchor='ne')
         assignmentPopup.wait_window()
 
-        if self.mode.get() == self.modes[0]: self.agenda()
-        else: self.schedule()
+        if self.mode.get() == self.modes[0]:
+            self.agenda()
+        else:
+            self.schedule()
 
-    def createSchedule(self, guides: dict, coefficients: dict[str, float], names:dict[str, str]) -> None:
-        self._session.daysCoefficients=coefficients;self._saver(self._session)
+    def createSchedule(self, guides: dict, coefficients: dict[str, float], names: dict[str, str]) -> None:
+        Storage.session().daysCoefficients = coefficients
+        Storage.save()
 
         rawSchedule = InputTransformer.generate_schedule_inputs_from_tasks(
-            tasksStore=self.getTasksForDays(self._session.tasks, self._session.selectedDays),
-            selectedDays=self._session.selectedDays,
+            tasksStore=self.getTasksForDays(Storage.session().tasks, Storage.session().selectedDays),
+            selectedDays=Storage.session().selectedDays,
             coefficients=coefficients,
-            sequences=self._session.sequences,
+            sequences=Storage.session().sequences,
             sequencesNames=names
         )
         scheduler = Scheduler(**guides)
         for seq in rawSchedule:
-            self._session.schedules[seq.name]=scheduler.schedule(seq.days, start_in_days=seq.start_in_days, verbose=True)
-        self._saver(self._session)
+            Storage.session().schedules[seq.name] = scheduler.schedule(
+                seq.days,
+                start_in_days=seq.start_in_days,
+                verbose=True
+            )
+        Storage.save()
 
-        self.selectedSchedule = StringVar(value=list(self._session.schedules.keys())[0])
+        self.selectedSchedule = StringVar(value=list(Storage.session().schedules.keys())[0])
 
     def previousMonth(self):
         self.month -= 1
@@ -392,17 +371,25 @@ class UI(Screen):
             self.year += 1
         self.agenda()
 
+    def openSettingsPanel(self):
+        SettingsPanel(
+            self.window,
+        )
+
     # utility functions
 
     @staticmethod
     def getTime(event: Event) -> Tuple[str, str]:
-        return event.startingTime.partition('T')[2].partition('+')[0], event.startingTime.partition('T')[2].partition('+')[0]
+        return event.startingTime.partition('T')[2].partition('+')[0], \
+        event.startingTime.partition('T')[2].partition('+')[0]
 
     @staticmethod
     def normalizeDay(text):
         for en, it in ENGLISH_TO_ITALIAN_DAYS.items():
             text = text.replace(en, it)
-        return text\
+        return text \
+ \
+    @staticmethod
 
     @staticmethod
     def normalizeMonth(text) -> str:
@@ -414,7 +401,7 @@ class UI(Screen):
     def getDaysFromTo(staringDay: date, endingDay: date) -> Tuple[date, ...]:
         dayRange: List[date] = []
 
-        for d in (staringDay + timedelta(n) for n in range( (endingDay - staringDay).days+1)):
+        for d in (staringDay + timedelta(n) for n in range((endingDay - staringDay).days + 1)):
             dayRange.append(d)
 
         return tuple(dayRange)
@@ -427,11 +414,11 @@ class UI(Screen):
         for event in agenda:
             if event.date.strftime("%Y-%m-%d") not in days.keys():
                 days[event.date.strftime("%Y-%m-%d")] = event.date
-        return tuple(days.values()) # noqa
+        return tuple(days.values())  # noqa
 
     @staticmethod
     def getEventsForDay(agenda: Agenda, day: date) -> Tuple[Event, ...]:
-        events: List[Event] = [] # noqa
+        events: List[Event] = []  # noqa
 
         event: Event
         for event in agenda:
@@ -458,6 +445,15 @@ class UI(Screen):
 
         return tasksForGivenDays
 
+    @staticmethod
+    def tkFontToTickle(font: Any):
+        family: str = font.family
+        size: int = font.size
+        weight: str = font.weight
+        slant: str = font.slant
+
+        return f"-family {family} -size {Screen.px(size)} -weight {weight} -slant {slant}"
+
     def processText(self, text: str) -> str:
         placeholder_map = {}
         for i, abbr in enumerate(self.ABBREVIATIONS):
@@ -466,7 +462,7 @@ class UI(Screen):
             placeholder_map[placeholder] = abbr
 
         # Now safe to split sentences
-        sentences = re.split(self.STATEMENT, text)
+        sentences = re.split(self.STATEMENT, text.replace('\n', " "))
 
         # Restore abbreviations
         sentences = [s.strip() for s in sentences if s.strip()]
@@ -474,125 +470,199 @@ class UI(Screen):
         for s in sentences:
             for placeholder, abbr in placeholder_map.items():
                 s = s.replace(placeholder, abbr)
-            restored.append(s)
+            restored.append(s + "   ")  # trailing padding spaces
         return "\n".join(restored)
 
     def preProcessSession(self):
-        self._session.selectedDays = sorted(self._session.selectedDays)
+        Storage.session().selectedDays = sorted(Storage.session().selectedDays)
         today = date.today()
-        startingDelta = (self._session.selectedDays[0] - today).days
+        startingDelta = (Storage.session().selectedDays[0] - today).days
         sequences: List[RawSequence] = []
-        for i, d in enumerate(self._session.selectedDays):
-            if (d - self._session.selectedDays[i - 1]).days == 1:
-                sequences[-1].days.append(d); continue
+
+        for i, d in enumerate(Storage.session().selectedDays):
+            if (d - Storage.session().selectedDays[i - 1]).days == 1:
+                sequences[-1].days.append(d)
+                continue
             else:
                 sequences.append(RawSequence(
-                                name=f"sequence_from_{d}",
-                                days=[d],
-                                start_in_days=startingDelta
+                    name=f"sequence_from_{d}",
+                    days=[d],
+                    start_in_days=startingDelta
                 ))
-        self._session.sequences = sequences
+        Storage.session().sequences = sequences
 
-        GuideConfigurator(self.window, self._session.daysCoefficients, self._session.sequences,
-                          self.createSchedule),
-
+        RunConfigurator(
+            self.window,
+            Storage.session().daysCoefficients,
+            Storage.session().sequences,
+            self.createSchedule
+        ),
 
     # class functions
 
-    def _emptyScreen(self):
+    def _emptyScreen(self) -> None:
         for child in self.mainFrame.winfo_children():
             child.destroy()
 
     def _initFrames(self) -> None:
         self.gridFrame = ScrolledFrame(
+            # doesn't get properly scaled, and none of its children too: it always tries to take up the most amount of space
             self.mainFrame,
             autohide=True,
-            width=self.size[0],
-            height=self.size[1] - 35 + (self.bottomPadding * 2), # Leave space for the buttons (35 pixels) plus 20 pixels for their vertical padding (both above and under)
+            width=Screen.px(self.size[0]),
+            height=Screen.px(self.size[1] * (2 / 3)),
             bootstyle='light'
         )
-        self.buttonsFrame = ttk.Frame(
+        self.buttonsFrame = ttk.Frame(  # gets properly scaled (and all of its children too).
             self.mainFrame,
-            bootstyle='light' # noqa
-        )
-        self.modeFrame = ttk.Frame(
+            bootstyle='light'  # noqa
+        )  # Also, Weirdly, (on the smaller screen I've tested it on, which is on a Windows machine), only visible in full screen, even when I force to make gridFrame very small by setting ridiculously low font sizes in "style_root"
+        self.modeFrame = ttk.Frame(  # gets properly scaled (and all of its children too)
             self.mainFrame,
-            bootstyle='light' # noqa
+            bootstyle='light'  # noqa
         )
 
     def _initButtons(self) -> None:
-        modeButton = ttk.Combobox(self.modeFrame, textvariable=self.mode, values=self.modes, bootstyle="danger") # noqa
+        # ALL these get properly scaled
+        modeButton = ttk.Combobox(self.modeFrame, textvariable=self.mode, values=self.modes, bootstyle="danger")  # noqa
         modeButton.config(state='readonly')
-        modeButton.bind("<<ComboboxSelected>>", self._updateStage)
-        modeButton.pack(pady=10, padx=25, side='left')
+        modeButton.bind("<<ComboboxSelected>>", self._initStage)
+        modeButton.pack(pady=Screen.px(10), padx=Screen.px(25), side='left')
 
         if self.mode.get() == self.modes[0]:
-            ttk.Button(self.buttonsFrame, text="Indietro", command=self.previousMonth,
-                       style="utility.info.TButton").pack(side='left', padx=20)
-            ttk.Button(self.buttonsFrame, text="Avanti", command=self.nextMonth, style="utility.info.TButton").pack(
-                side='left')
+            ttk.Button(
+                self.buttonsFrame,
+                text="Indietro",
+                command=self.previousMonth,
+                style="utility.info.TButton",
+            ).pack(side='left', padx=Screen.px(20))
 
-            self.summit_button = ttk.Button(
+            ttk.Button(
+                self.buttonsFrame,
+                text="Avanti",
+                command=self.nextMonth,
+                style="utility.info.TButton",
+            ).pack(side='left')
+
+            self.submit_button = ttk.Button(
                 self.buttonsFrame,
                 text="Crea programma",
                 command=self.preProcessSession,
                 style="utility.info.TButton",
                 state="disabled"
             )
+            self.submit_button.pack(padx=Screen.px(15), side='right')
 
-            self.summit_button.pack(padx=15, side='right')
+            self.submit_button = ttk.Button(
+                self.buttonsFrame,
+                text="Impostazioni",
+                command=self.preProcessSession,
+                style="utility.info.TButton",
+            )
+            self.submit_button.pack(padx=Screen.px(15), side='bottom', anchor='s')
 
             self.buttonsFrame.pack(side='bottom', fill='x', pady=self.bottomPadding)
 
         if self.mode.get() == self.modes[1]:
-            scheduleNames: List[str] = list(self._session.schedules.keys())
+            scheduleNames: List[str] = list(Storage.session().schedules.keys())
             if scheduleNames:
                 scheduleSelector = ttk.Combobox(
                     self.modeFrame,
                     textvariable=self.selectedSchedule,
                     values=scheduleNames,
-                    bootstyle="danger" # noqa
+                    font=self.fonts["options"],
+                    bootstyle="danger"
                 )
                 scheduleSelector.config(state='readonly')
-                scheduleSelector.bind("<<ComboboxSelected>>", self._updateStage)
-                scheduleSelector.pack(pady=10, padx=25, side='right')
+                scheduleSelector.bind("<<ComboboxSelected>>", self._initStage)
+                scheduleSelector.pack(pady=Screen.px(10), padx=Screen.px(25), side='right')
 
         self.modeFrame.pack(side='top', fill='x')
 
-    def _initStage(self, *args: Optional[Any]) -> None: # noqa
+    # needed purely as a callback (Event) for tkinter; as Events can't have arguments.
+    def _initStage(self, *args: Optional[Any]) -> None:
+        self._updateStage(init=False)
+
+    def _updateStage(self, init: bool) -> None:
         self._emptyScreen()
         self._initFrames()
         self._initButtons()
 
-        self.mainFrame.pack(fill='both')
+        if not init:
+            if self.mode.get() == self.modes[0]:
+                self.agenda()
+            else:
+                self.schedule()
 
-    def _updateStage(self, *args: Optional[Any]) -> None: # noqa
-        self._emptyScreen()
-        self._initFrames()
-        self._initButtons()
+        self.mainFrame.pack(fill='both', expand=True)
 
-        if self.mode.get() == self.modes[0]:
-            self.agenda()
-        else:
-            self.schedule()
+    def style_root(self) -> Dict[str, Any]:
 
-        self.mainFrame.pack(fill='both')
+        print(Storage.session().preferences)
+
+        family: str = Storage.session().preferences.systemFontFamily
+        baseSize: int = Storage.session().preferences.systemFontSize
+
+        specs: Dict[str, tuple[str, float | int, Literal["normal", "bold"], Literal["roman", "italic"]]] = {
+            "task": (family, baseSize + 2, "normal", "roman"),
+            "day": (family, baseSize + 2, "bold", "roman"),
+            "general": (family, baseSize + 4, "normal", "roman"),
+            "utility": (family, baseSize + 4, "bold", "roman"),
+            "options": (family, baseSize, "normal", "roman"),
+            "ass-author": (family, baseSize + 20, "bold", "roman"),
+            "ass-subtitle": (family, baseSize + 10, "normal", "roman"),
+            "ass-body": (family, baseSize + 4, "normal", "roman"),
+            "err-title": (family, baseSize + 10, "bold", "roman"),
+            "err-body": (family, baseSize + 4, "normal", "roman"),
+            "err-helper": (family, baseSize + 4, "normal", "italic"),
+        }
+        fonts = createFontsForStyle(AppRoot.get_root(), specs)
+
+        applyFontsToStyles(self.style, {
+            "task.danger.TButton": fonts["task"],
+            "task.warning.TButton": fonts["task"],
+            "task.success.TButton": fonts["task"],
+            "day.secondary.TButton": fonts["day"],
+            "day.primary.TButton": fonts["day"],
+            "day.info.TButton": fonts["day"],
+            "day.dark.TButton": fonts["day"],
+            "utility.info.TButton": fonts["utility"],
+            "generic.info.TButton": fonts["utility"]
+        })
+
+        applyOptionsToStyles(self.style, {
+            "task.danger.TButton": {"anchor": "w"},
+            "task.warning.TButton": {"anchor": "w"},
+            "task.success.TButton": {"anchor": "w"},
+            "day.secondary.TButton": {"anchor": "w"},
+            "day.primary.TButton": {"anchor": "w"},
+            "day.info.TButton": {"anchor": "w"},
+            "day.dark.TButton": {"anchor": "w"},
+            "utility.info.TButton": {"anchor": "w"}
+        })
+
+        Storage.session().preferences.fonts = fonts
+
+        return fonts
 
     def agenda(self) -> None:
         monthDaysRange = last_day_of(self.year, self.month)
-        endingDate    : date = date(self.year, self.month, monthDaysRange[1])
-        startingDate  : date = date(self.year, self.month, 1)
-        startingDelta: int  = monthDaysRange[0]
-        endingDelta  : int  = 7 - (ITALIAN_DAYS.index(ENGLISH_TO_ITALIAN_DAYS[endingDate.strftime("%a")])+1) # convert last  weekday from english short ("Mon") to italian full ("Lunedì"), then do a bunch of $hit to get the ending delta.
+        endingDate: date = date(self.year, self.month, monthDaysRange[1])
+        startingDate: date = date(self.year, self.month, 1)
+        startingDelta: int = monthDaysRange[0]
+        endingDelta: int = 7 - (ITALIAN_DAYS.index(ENGLISH_TO_ITALIAN_DAYS[endingDate.strftime(
+            "%a")]) + 1)  # convert last  weekday from english short ("Mon") to italian full ("Lunedì"), then do a bunch of $hit to get the ending delta.
         days: Tuple[date, ...] = self.getDaysFromTo(staringDay=startingDate, endingDay=endingDate)
 
-        self.summit_button["state"] = "disabled" if not self._session.selectedDays else "normal"
+        self.submit_button["state"] = "disabled" if not Storage.session().selectedDays else "normal"
 
-        for child in self.gridFrame.winfo_children(): # remove any remains of previous cells
+        # not any of the widgets added from here on are ever scaled
+
+        for child in self.gridFrame.winfo_children():  # remove any remains of previous cells
             child.destroy()
 
         cols: Final[int] = 7
-        rows: Final[int] = ceil( (len(days)+startingDelta+endingDelta) / 7 )
+        rows: Final[int] = ceil((len(days) + startingDelta + endingDelta) / 7)
 
         for i in range(cols):
             self.gridFrame.columnconfigure(i, weight=1, uniform="horizontal")
@@ -600,31 +670,32 @@ class UI(Screen):
             self.gridFrame.rowconfigure(i, weight=2)
 
         for col in range(cols):
-            ttk.Label(master=self.gridFrame, text=ITALIAN_DAYS[col], anchor=CENTER, style="day.dark.TButton").grid(
-                row=0, column=col, sticky="we", padx=8, pady=4)
+            ttk.Label(master=self.gridFrame, text=ITALIAN_DAYS[col], anchor=CENTER, style="dark.TLabel").grid(
+                row=0, column=col, sticky="we", padx=Screen.px(8), pady=Screen.px(4))
 
         for r in range(1, rows + 1):
             for col in range(cols):
-                day: date = startingDate+timedelta(days=col-startingDelta)
-                events: Tuple[Event, ...] = self.getEventsForDay(self._session.agenda, day)
-
+                day: date = startingDate + timedelta(days=col - startingDelta)
+                events: Tuple[Event, ...] = self.getEventsForDay(Storage.session().agenda, day)
 
                 bStyle = "secondary"
-                if (col < startingDelta and r == 1) or (day > endingDate): bStyle = "dark"
-                elif day == self.today: bStyle = "info"
+                if (col < startingDelta and r == 1) or (day > endingDate):
+                    bStyle = "dark"
+                elif day == self.today:
+                    bStyle = "info"
 
-                if day in self._session.selectedDays: bStyle = "primary"
+                if day in Storage.session().selectedDays: bStyle = "primary"
                 style = f"day.{bStyle}.TButton"
 
                 tasksFrame = ttk.Frame(
                     self.gridFrame,
-                    bootstyle=bStyle # noqa
+                    bootstyle=bStyle  # noqa
                 )
                 tasksFrame.columnconfigure(0, weight=1)
 
                 dayFrame = ttk.Frame(
                     tasksFrame,
-                    bootstyle=bStyle, # noqa
+                    bootstyle=bStyle,  # noqa
                     height=20
                 )  # The label representing the day containing the following tasks needs to have a fixed height, so a separate frame
 
@@ -635,43 +706,41 @@ class UI(Screen):
 
                     variable=day,
                     callback=self.agenda,
-                    selected_list=self._session.selectedDays,
+                    selected_list=Storage.session().selectedDays,
                     max_length=14
                 )
                 dayLabel.pack(side='top')
 
                 dayFrame.grid(row=0, column=0)
-                tasksFrame.grid(row=r, column=col, padx=2, pady=4, sticky="nswe")
+                tasksFrame.grid(row=r, column=col, padx=Screen.px(2), pady=Screen.px(4), sticky="nswe")
 
                 if not ((col < startingDelta and r == 1) or (day > endingDate)):
 
                     for i in range(len(events)):
-                        tasksFrame.rowconfigure(i+1, weight=12 // len(events))
+                        tasksFrame.rowconfigure(i + 1, weight=12 // len(events))
 
                     for i, event in enumerate(events):
-                        t: str = f'{event.author}\n{event.notes[:36]} {"..." if len(event.notes) >= 35 else ""}'
+                        t: str = f'{event.author}\n{event.notes[:36]} {"..." if len(getattr(event, "notes", "")) >= 35 else ""}'
                         uid: str = str(event.id)
                         var: IntVar = IntVar(value=0)
 
                         # if it didn't exist, add it manually
-                        if not uid in self._session.tasks:
-                            self._session.tasks.add(
+                        if not uid in Storage.session().tasks:
+                            Storage.session().tasks.add(
                                 due_date=day,
                                 effortVar=var,
                                 uid=uid
                             )
 
-                        #print(day in self._session.selectedDays, self._session.tasks.get(uid).effortVar.get())
-
-                        if day not in self._session.selectedDays:
+                        if day not in Storage.session().selectedDays:
                             s = "task.danger.TButton" if col % 2 == 0 else "task.warning.TButton"
                         else:
-                            effort =  self._session.tasks.get(uid).effortVar.get()
+                            effort = Storage.session().tasks[uid].effortVar.get()
                             if effort >= 64:
                                 s = "task.danger.TButton"
                             elif 33 <= effort < 64:
                                 s = "task.warning.TButton"
-                            else :
+                            else:
                                 s = "task.success.TButton"
 
                         button = ttk.Button(
@@ -680,16 +749,15 @@ class UI(Screen):
                             command=lambda UID=uid: self.showAssignment(UID),
                             style=s
                         )
-                        button.grid(row=i+1, column=0, padx=0, pady=2, sticky="nswe")
+                        button.grid(row=i + 1, column=0, padx=Screen.px(0), pady=Screen.px(2), sticky="nswe")
 
-                        #if uid == "507067": print(*[f"{p}: {repr(getattr(button, p))}" for p in dir(button)], sep="\n") # print all properties of the button for debugging
+            startingDate += timedelta(days=col + 1)  # noqa
 
-            startingDate+=timedelta(days=col+1) # noqa
+        self.gridFrame.pack(fill='both', padx=Screen.px(15), expand=True)
 
-        self.gridFrame.pack(fill='both', padx=15)
+        Storage.save()
 
-        self._saver(self._session)
-
+    # TODO: this needs to be completely re-worked. (See the note heading the file)
     def schedule(self) -> None:
         cols = 7
         schedule_name: str = self.selectedSchedule.get()
@@ -697,7 +765,7 @@ class UI(Screen):
         for child in self.gridFrame.winfo_children():
             child.destroy()
 
-        scheduler_result: Dict[str, Any] = self._session.schedules.get(schedule_name)
+        scheduler_result: Dict[str, Any] = Storage.session().schedules.get(schedule_name, {})
 
         slot_plan: List[List[Dict[str, Any]]] = scheduler_result.get("slot_plan", [])
         task_completion: List[Dict[str, Any]] = scheduler_result.get("task_completion", [])
@@ -708,7 +776,9 @@ class UI(Screen):
             n_due_days = len(scheduler_result["per_due_by_slot"])
         elif "per_due_totals_required" in stats:
             n_due_days = len(stats["per_due_totals_required"])
-        else: raise ScheduleError("Cannot determine number of due days from scheduler result: the provided schedule was malformed.")
+        else:
+            raise ScheduleError(
+                "Cannot determine number of due days from scheduler result: the provided schedule was malformed.")
 
         start_in_days = int(stats["start_in_days"]) if "start_in_days" in stats else max(0, n_slots - n_due_days)
 
@@ -733,13 +803,13 @@ class UI(Screen):
             for c in range(cols):
                 if slot_idx >= n_slots:
                     # empty placeholder
-                    placeholder = ttk.Frame(self.gridFrame, height=80, bootstyle="dark") # noqa
-                    placeholder.grid(row=r, column=c, padx=6, pady=6, sticky="nswe")
+                    placeholder = ttk.Frame(self.gridFrame, height=80, bootstyle="dark")  # noqa
+                    placeholder.grid(row=r, column=c, padx=Screen.px(6), pady=Screen.px(6), sticky="nswe")
                     slot_idx += 1
                     continue
 
-                cell = ttk.Frame(self.gridFrame, padding=6, bootstyle="secondary") # noqa
-                cell.grid(row=r, column=c, padx=6, pady=6, sticky="nswe")
+                cell = ttk.Frame(self.gridFrame, padding=Screen.px(6), bootstyle="secondary")  # noqa
+                cell.grid(row=r, column=c, padx=Screen.px(6), pady=Screen.px(6), sticky="nswe")
                 cell.columnconfigure(0, weight=1)
 
                 # label for the slot
@@ -748,7 +818,8 @@ class UI(Screen):
                 else:
                     schedule_day_for_slot = slot_idx - start_in_days + 1
                     slot_label = f"Slot {slot_idx + 1}\n(night before day {schedule_day_for_slot})"
-                ttk.Label(cell, text=slot_label, anchor=CENTER, font="Futura 12 bold", bootstyle='inverse-secondary').grid( # noqa
+                ttk.Label(cell, text=slot_label, anchor=CENTER, font="Punk 12 bold",
+                          bootstyle='inverse-secondary').grid(  # noqa
                     row=0, column=0, sticky="we", pady=(0, 6)
                 )
 
@@ -758,7 +829,8 @@ class UI(Screen):
 
                 entries = slot_plan[slot_idx] if slot_idx < len(slot_plan) else []
                 if not entries:
-                    ttk.Label(inner, text="(no tasks)", font="Futura 10 italic", bootstyle='inverse-secondary').pack(anchor="w", pady=4) # noqa
+                    ttk.Label(inner, text="(no tasks)", font="Punk 10 italic", bootstyle='inverse-secondary').pack(
+                        anchor="w", pady=Screen.px(4))  # noqa
                 else:
                     per_slot_total = sum(float(x.get("units", 0.0)) for x in entries)
                     for e in entries:
@@ -772,94 +844,68 @@ class UI(Screen):
                         total_units = task_totals.get(total_key, None)
                         pct = (100.0 * units / total_units) if (total_units is not None and total_units > 0.0) else None
 
-                        if pct is not None: txt = f"{uid_display}\n{pct:.1f}% • {units:.2f}u"
-                        else: txt = f"{uid_display}\n{units:.2f}u"
+                        if pct is not None:
+                            txt = f"{uid_display}\n{pct:.1f}% • {units:.2f}u"
+                        else:
+                            txt = f"{uid_display}\n{units:.2f}u"
 
                         # choose bootstyle based on pct
-                        if pct is not None:
-                            if pct >= 50.0: bs = "danger"
-                            elif pct >= 25.0: bs = "warning"
-                            else: bs = "success"
+                        if pct >= 50.0:
+                            bs = "danger"
+                        elif pct >= 25.0:
+                            bs = "warning"
                         else:
-                            ratio = (units / per_slot_total) if per_slot_total > 0 else 0.0
-                            if ratio >= 0.5: bs = "danger"
-                            elif ratio >= 0.25: bs = "warning"
-                            else: bs = "success"
+                            bs = "success"
 
                         def _callback(uid_local=task_uid_raw, uid_raw=task_uid_raw, d=due_day, u=units, p=pct):
-                            # if integer uid and present in tasks store, use your popup
-                            if uid_local is not None and uid_local in self._session.tasks:
-                                self.showAssignment(uid_local)
-                                return
-                            # else try to find matching event id in agenda (Event.id are ints)
-                            if uid_local is not None:
-                                for ev in self._session.agenda:
-                                    if ev.id == uid_local:
-                                        self.showAssignment(uid_local)
-                                        return
-                            # fallback: small info popup for fragments / unknown UID
-                            popup = ttk.Toplevel(size=(600,300))
-                            popup.title(f"Task {uid_raw}" if uid_raw is not None else "Fragment")
-                            frame = ttk.Frame(popup, padding=12)
-                            ttk.Label(frame, text=f"Task {uid_raw}" if uid_raw is not None else "Fragment", font="Futura 20 bold").pack(anchor="w")
-                            ttk.Label(frame, text=f"Due schedule day: {d}", font="Futura 14").pack(anchor="w", pady=(6, 0))
-                            ttk.Label(frame, text=f"Units in this slot: {u:.2f}u", font="Futura 14").pack(anchor="w", pady=(2, 0))
-                            if p is not None:
-                                ttk.Label(frame, text=f"Percent of task: {p:.1f}%", font="Futura 14").pack(anchor="w",  pady=(2, 6))
-                            ttk.Button(frame, text="Chiudi", command=popup.destroy, bootstyle="primary").pack(anchor="e", pady=(10, 0)) # noqa
-                            frame.pack(fill="both", expand=True)
-                            popup.grab_set()
-                            popup.wait_window()
+                            self.showAssignment(uid_local)
 
-                        btn = ttk.Button(inner, text=txt, bootstyle=bs, command=_callback) # noqa
+                        btn = ttk.Button(inner, text=txt, bootstyle=bs, command=_callback)  # noqa
                         if repaired:
                             btn.configure(text=btn.cget("text") + "\n(repaired)")
-                        btn.pack(fill="x", pady=3)
+                        btn.pack(fill="x", pady=Screen.px(3))
 
                 slot_idx += 1
 
-        self.gridFrame.pack(fill='both', padx=15)
+        self.gridFrame.pack(fill='both', padx=Screen.px(15))
 
-# specialized button that toggles its style and updates an external list
+
+# specialised button that toggles its style and updates an external list
 class ToggleButton(ttk.Button):
-    def __init__(self, master, starting_style, variable, selected_list, max_length, callback:Callable, **kwargs):
+    def __init__(self, master, starting_style, variable, selected_list, max_length, callback: Callable, **kwargs):
         super().__init__(master, **kwargs)
-        self.variable:      Any        = variable       # The variable to add/remove from the list
-        self.callback:      Callable   = callback
-        self.selected_list: List[Any]  = selected_list
-        self.max_length:    Final[int] = max_length
-        self.current_style: str        = starting_style
+        self.variable: Any = variable  # The variable to add/remove from the list
+        self.callback: Callable = callback
+        self.selected_list: List[Any] = selected_list
+        self.max_length: Final[int] = max_length
+        self.current_style: str = starting_style
 
         # If the style is dark, disable the button
-        if "dark" in self.current_style: action = None
-        else: action = self.on_click
+        if "dark" in self.current_style:
+            action = None
+        else:
+            action = self.on_click
 
         self.configure(style=self.current_style, command=action)
 
     def on_click(self):
-        if len(self.selected_list) >= self.max_length and not (self.current_style == "day.primary.TButton" or self.current_style == "day.info.TButton"):
-            return # do nothing if the max length is reached and we are trying to select another day
-        if self.current_style == "day.secondary.TButton" or self.current_style == "day.info.TButton":
+        if len(self.selected_list) == self.max_length and self.current_style != "day.primary.TButton":
+            return  # do nothing if the max length is reached and we are trying to select another day
+        if self.current_style != "day.primary.TButton":
             self.selected_list.append(self.variable)
         else:
             self.selected_list.remove(self.variable)
 
-        self.callback() # Update the parent GUI
+        self.callback()  # Update the parent GUI
 
-class GuideConfigurator(Screen):
+
+class RunConfigurator:
     def __init__(self, parent, coefficients, sequences, launch_callback):
-        """
-        parent: master window or frame
-        dpi: your scaling factor
-        launch_callback: function(dict) called with guide values when "Launch Training" pressed
-        """
-        super().__init__()
-
         self.parent = parent
         self.launch_callback = launch_callback
 
         # Define the 4 characteristics and default values
-        self.guides: Dict[str,str] = {
+        self.guides: Dict[str, str] = {
             "avoid_burnout": "medium",
             "distribute_evenly": "medium",
             "lightness": "medium",
@@ -870,15 +916,15 @@ class GuideConfigurator(Screen):
         self.sequences = sequences
 
         # Create the popup window
-        self.popup = ttk.Toplevel(title="Pre-configurazione")
-        self.popup.resizable(False, False)
+        self.popup = PopupMaster.popup(title="Pre-configurazione")
+        # self.popup.window.resizable(False, False)
 
         # Frame for options
-        self._days_coeff_container: ttk.Frame = ttk.Frame(self.popup)
-        self._days_coeff_container.pack(fill="x", expand=True, padx=5, pady=10)
+        self._days_coeff_container: ttk.Frame = ttk.Frame(self.popup.window)
+        self._days_coeff_container.pack(fill="x", expand=True, padx=Screen.px(5), pady=Screen.px(10))
 
-        self._sched_coeff_container: ttk.Frame = ttk.Frame(self.popup)
-        self._sched_coeff_container.pack(fill="both", expand=True, padx=40, pady=30)
+        self._sched_coeff_container: ttk.Frame = ttk.Frame(self.popup.window)
+        self._sched_coeff_container.pack(fill="both", expand=True, padx=Screen.px(40), pady=Screen.px(30))
 
         for day in ENGLISH_SHORT_DAYS[:5]:
             self._days_coeff_container.columnconfigure(ENGLISH_SHORT_DAYS.index(day), weight=1)
@@ -889,21 +935,20 @@ class GuideConfigurator(Screen):
             self._days_coeff_container,
             text="Coefficiente di difficoltà per giorno della settimana (1-2)",
             font=("Segoe UI", 17, "bold")
-        ).grid(row=0, column=0, columnspan=len(ENGLISH_SHORT_DAYS), padx=5, pady=10)
+        ).grid(row=0, column=0, columnspan=len(ENGLISH_SHORT_DAYS), padx=Screen.px(5), pady=Screen.px(10))
 
         for coeff, day in zip(self.coefficients, ITALIAN_DAYS[:5]):
             ttk.Label(
                 self._days_coeff_container,
                 text=day,
                 font=("Segoe UI", 14)
-            ).grid(row=1, column=ITALIAN_DAYS.index(day), padx=5, pady=5)
+            ).grid(row=1, column=ITALIAN_DAYS.index(day), padx=Screen.px(5), pady=Screen.px(5))
 
             ttk.Entry(
                 self._days_coeff_container,
                 textvariable=coeff,
                 font=("Segoe UI", 14)
-            ).grid(row=2, column=ITALIAN_DAYS.index(day), padx=5, pady=5)
-
+            ).grid(row=2, column=ITALIAN_DAYS.index(day), padx=Screen.px(5), pady=Screen.px(5))
 
         # Define row layout
         self.options = [
@@ -917,12 +962,12 @@ class GuideConfigurator(Screen):
 
         # Launch button
         ttk.Button(
-            self.popup,
+            self.popup.window,
             text="Invia",
             style="info.TButton",
             command=self._on_launch,
-            bootstyle=SUCCESS # noqa
-        ).pack(pady=20)
+            bootstyle=SUCCESS  # noqa
+        ).pack(pady=Screen.px(20))
 
     def _populate_choices(self):
         for child in self._sched_coeff_container.winfo_children(): child.destroy()
@@ -932,29 +977,29 @@ class GuideConfigurator(Screen):
     def _create_option_row(self, parent, row, text, key):
         """Create a single labeled row with 3 toggle buttons."""
         frame = ttk.Frame(parent)
-        frame.pack(fill="x", pady=10)
+        frame.pack(fill="x", pady=Screen.px(10))
 
         frame.columnconfigure(0, weight=2)
         for i in range(1, 4 + 1):
             frame.columnconfigure(i, uniform="level")
 
-        ttk.Label(frame, text=text, font="Futura 18").grid(row=row, column=0, padx=(0, 30), sticky="w")
+        ttk.Label(frame, text=text, font="Punk 18").grid(row=row, column=0, padx=(0, 30), sticky="w")
 
         def make_button(info, style, value, column):
             btn = ttk.Checkbutton(
                 frame,
                 text=info.capitalize(),
-                bootstyle=f"{style}-toolbutton" # noqa
+                bootstyle=f"{style}-toolbutton"  # noqa
             )
-            if self.guides[key]==value: btn.invoke()
+            if self.guides[key] == value: btn.invoke()
             btn.configure(command=lambda: self._set_value(key, value))
-            btn.grid(column=column, row=row, padx=5, sticky="e")
+            btn.grid(column=column, row=row, padx=Screen.px(5), sticky="e")
             return btn
 
         self._buttons_for_key = []
-        self._buttons_for_key.append(make_button("poco" , "success", "low"   , 1))
+        self._buttons_for_key.append(make_button("poco", "success", "low", 1))
         self._buttons_for_key.append(make_button("medio", "warning", "medium", 2))
-        self._buttons_for_key.append(make_button("tanto", "danger" , "high"  , 3))
+        self._buttons_for_key.append(make_button("tanto", "danger", "high", 3))
 
     def _set_value(self, key, value):
         """Update the internal guide dict."""
@@ -963,7 +1008,7 @@ class GuideConfigurator(Screen):
 
     def _on_launch(self):
         """Called when the Launch button is pressed."""
-        self.popup.destroy()
+        self.popup.close()
 
         names: Dict[str, str] = {}
         seq: RawSequence
@@ -973,13 +1018,26 @@ class GuideConfigurator(Screen):
 
             nameVar = StringVar(value="")
 
-            ttk.Label(name_popup.window, text=f"""Inserisci del {ITALIAN_ORDINAL_NUMBERS[i]} programma (da {seq.days[0].strftime("%d %B, %Y")} a {seq.days[-1].strftime("%d %B, %Y")}): """, font=("Futura", 22, "bold"), anchor='center').pack(pady=8, fill='x')
-            ttk.Separator(name_popup.window).pack(fill="x", pady=0)
-            ttk.Entry(name_popup.window, textvariable=nameVar, font=("Futura", 16)).pack(side='top')
-            ttk.Button(name_popup.window, text="Invia", style="utility.info.TButton", command=name_popup.close).pack(side='top', ipady=15)
+            ttk.Label(name_popup.window,
+                      text=f"""Inserisci del {ITALIAN_ORDINAL_NUMBERS[i]} programma (da {seq.days[0].strftime("%d %B, %Y")} a {seq.days[-1].strftime("%d %B, %Y")}): """,
+                      font=("Punk", 22, "bold"), anchor='center').pack(pady=Screen.px(8), fill='x')
+            ttk.Separator(name_popup.window).pack(fill="x", pady=Screen.px(0))
+            ttk.Entry(name_popup.window, textvariable=nameVar, font=("Punk", 16)).pack(side='top')
+            ttk.Button(name_popup.window, text="Invia", style="utility.info.TButton", command=name_popup.close).pack(
+                side='top', ipady=Screen.px(15))
 
             name_popup.show_modal()
 
-            names[seq.name]=nameVar.get()
+            names[seq.name] = nameVar.get()
 
-        self.launch_callback(self.guides, {day:val for val, day in zip([var.get() for var in self.coefficients], ENGLISH_SHORT_DAYS)}, names)
+        self.launch_callback(self.guides, {day: val for val, day in
+                                           zip([var.get() for var in self.coefficients], ENGLISH_SHORT_DAYS)}, names)
+
+# TODO: actually code this. For now it's just a draft
+class SettingsPanel:
+    def __init__(self, parent):
+        """
+        parent: master window or frame
+        update_callback: function(dict) called with guide values when "Launch Training" pressed
+        """
+        self.parent = parent

@@ -28,10 +28,17 @@ class MemoryStorage:
         pass
 
     @classmethod
-    def load(cls, path: Path, default: Optional[Any] = None) -> Union[SessionData, Any]:
+    def load(cls, path: Path, default: Optional[Any] = None) -> SessionData | Any:
         try:
             return SessionData.from_dict(json.loads(path.absolute().read_text()))
         except (JSONDecodeError,FileNotFoundError):
+            return default
+
+    @classmethod
+    def loadKey(cls, key: str, path: Path, default: Optional[Any] = None) -> dict | Any:
+        try:
+            return json.loads(path.absolute().read_text())[key]
+        except (JSONDecodeError,FileNotFoundError,KeyError):
             return default
 
     @classmethod

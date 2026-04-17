@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TypedDict, List, Dict, Any, Optional, Callable, Tuple, get_origin, get_args, Union, Final
+from typing import TypedDict, List, Dict, Any, Optional, Callable, Tuple, get_origin, get_args, Union, Final, Literal
 from tkinter import IntVar
 from datetime import date
 
@@ -120,6 +120,8 @@ class CvvEventDict(TypedDict, total=True):
 class CvvAgentaList(List):
     pass
 
+"""
+Just for testing type overloading logic; not actually correct (ARGO doesn't even have an API, as far as I know)
 class ArgoEventDict(TypedDict, total=True):
     evtDatetimeBegin: str
     evtDatetimeEnd: str
@@ -129,6 +131,7 @@ class ArgoEventDict(TypedDict, total=True):
     subjectDesc: str
 class ArgoAgendaList(List):
     pass
+"""
 
 # --- application-specific datatypes ---
 @dataclass
@@ -161,6 +164,9 @@ class TasksStore:
     def __add__(self, other: "TasksStore"):
         return TasksStore({**self._tasks, **other._tasks})
 
+    def __getitem__(self, item):
+        return self._tasks[item]
+
     def keys(self):
         return self._tasks.keys()
 
@@ -174,7 +180,7 @@ class TasksStore:
         self,
         uid: str,
         due_date: date,
-        effortVar: Optional[IntVar] = None,
+        effortVar: IntVar,
     ):
 
         self._tasks[uid] = Task(due_date, effortVar)
@@ -223,7 +229,7 @@ class _CvvAgenda:
     schedules: List[_CvvEvent]
 
 """
-Just for testing type overloading logic; not actually correct
+Just for testing type overloading logic; not actually correct (ARGO doesn't even have an API, as far as I know)
 # --- ARGO Data Types ---
 
 class _ArgoEvent:
@@ -257,22 +263,6 @@ class Event:
     subjectName: Optional[str]
     homeworkId: Optional[int]
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "code": self.code,
-            "date": [self.date.year, self.date.month, self.date.day],
-            "startingTime": self.startingTime,
-            "endingTime": self.endingTime,
-            "isFullDay": self.isFullDay,
-            "notes": self.notes,
-            "author": self.author,
-            "className": self.className,
-            "subjectId": self.subjectId,
-            "subjectName": self.subjectName,
-            "homeworkId": self.homeworkId,
-        }
-
 @dataclass
 class Agenda:
     _schedules: list[Event] = field(default_factory=list[Event])
@@ -282,9 +272,6 @@ class Agenda:
 
     def __iter__(self):
         return self._schedules.__iter__()
-
-    def to_dict(self):
-        return [event.to_dict() for event in self._schedules]
 
     @classmethod
     def from_dict(cls, data: AGENDA_DICT) -> "Agenda":
@@ -446,7 +433,7 @@ def _cvvToAgenda(lst: List[CvvEventDict]) -> Agenda:
     return Agenda(_schedules=[_cvvToEvent(item) for item in lst])
 
 """
-Just for testing type overloading logic; not actually correct
+Just for testing type overloading logic; not actually correct (ARGO doesn't even have an API, as far as I know)
 # --- ARGO converters ---
 @registerEvent(typedict=ArgoEventDict, name="ARGO")
 def _argoToEvent(d: ArgoEventDict) -> Event:
@@ -481,8 +468,41 @@ def dateFromDict(d: DATE_DICT):
 # --- Other application Data Types ---
 
 @dataclass
+class PreferencesStore:
+    defaultTheme: str = "Pulse"
+    defaultFontFamily: str = "Arial"
+    defaultFontSize: int = 40
+    defaultScrollSensitivity: float = 0.1
+
+    systemTheme: str = field(default=defaultTheme)
+    systemFontFamily: str  = field(default=defaultFontFamily)
+    systemFontSize: int = field(default=defaultFontSize)
+    systemScrollSensitivity: float = field(default=defaultScrollSensitivity)
+
+    @staticmethod
+    def whichToSave(system: Any, default: Any):
+        return system if system != default else default # only save the loaded system preference if it's not the default
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "theme"            : self.whichToSave(self.systemTheme            , self.defaultTheme),
+            "fontFamily"       : self.whichToSave(self.systemFontFamily       , self.defaultFontFamily),
+            "fontSize"         : self.whichToSave(self.systemFontSize         , self.defaultFontSize),
+            "scrollSensitivity": self.whichToSave(self.systemScrollSensitivity, self.defaultScrollSensitivity)
+        }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "PreferencesStore":
+        return cls(
+            systemTheme=d.get("theme", cls.defaultTheme),
+            systemFontFamily=d.get("fontFamily", cls.defaultFontFamily),
+            systemFontSize=d.get("fontSize", cls.defaultFontSize),
+            systemScrollSensitivity=d.get("scrollSensitivity", cls.defaultScrollSensitivity)
+        )
+
+@dataclass
 class RawSequence:
-    name: Optional[str]
+    name: str
     start_in_days: int
     days: List[date]
 
@@ -496,7 +516,7 @@ class RawSequence:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "RawSequence":
         return cls(
-            name=d.get("name", ""),
+            name=d.get("name", "none"),
             start_in_days=d.get("start_in_days", 0),
             days=[dateFromDict(dd) for dd in d.get("days", [])]
         )
@@ -506,7 +526,7 @@ class RawSequence:
 
 @dataclass
 class ProcessedSequence:
-    name: Optional[str]
+    name: str
     start_in_days: int
     days: List[InputDay]
 
@@ -520,7 +540,7 @@ class ProcessedSequence:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "ProcessedSequence":
         return cls(
-            name=d.get("name", ""),
+            name=d.get("name", "none"),
             start_in_days=d.get("start_in_days", 0),
             days=d.get("days", [])
         )
@@ -536,11 +556,23 @@ class SessionData:
     daysCoefficients: dict[str, float] = field(default_factory=dict[str, float])
     sequences: list[RawSequence] = field(default_factory=list[RawSequence])
     schedules: dict[str, dict[str, Any]] = field(default_factory=dict[str, dict[str, Any]])
+    preferences: PreferencesStore = field(default_factory=PreferencesStore)
 
     def __bool__(self) -> bool:
         if type(self) == type(None): return False
         if self.agenda == [] and self.selectedDays == [] and self.tasks == {} and self.daysCoefficients == []: return False
         return True
+
+    def __getitem__(self, item: Literal["agenda", "selectedDays", "tasks", "daysCoefficients", "schedules", "preferences"]):
+        match item:
+            case "agenda": return self.agenda
+            case "selectedDays": return self.selectedDays
+            case "tasks": return self.tasks
+            case "daysCoefficients": return self.daysCoefficients
+            case "sequences": return self.sequences
+            case "schedules": return self.schedules
+            case "preferences": return self.preferences
+
 
     def properties(self) -> Tuple[Union[str, None], Union[str, None], Union[str, None], Union[str, None]]:
         return "Agenda" if self.agenda else None, "SelectedDays" if self.selectedDays else None, "Tasks" if self.selectedDays else None, "Coefficients" if self.daysCoefficients else None
@@ -551,19 +583,30 @@ class SessionData:
     def types(self):
         return tuple([type(self.agenda), type(self.selectedDays), type(self.tasks), type(self.daysCoefficients)])
 
-    def to_dict(self, agenda: bool = True, selected: bool = True, tasks:bool = True, coeff:bool = True, seq:bool = False, schedules:bool = False) -> SESSION_DATA_DICT:
+    def to_dict(
+            self, pref: bool = False,
+            agenda: bool = False,
+            selected: bool = False,
+            tasks:bool = False,
+            coeff:bool = False,
+            seq:bool = False,
+            sched:bool = False
+    ) -> SESSION_DATA_DICT:
+
         out = {}
+        if pref:out["preferences"] = self.preferences.to_dict()
         if agenda:out["agenda"] = self.agenda.to_dict()
         if selected:out["selected_days"] = [dateToDict(d) for d in self.selectedDays]
         if tasks:out["tasks"] = self.tasks.to_dict()
         if coeff:out["days_coefficients"] = self.daysCoefficients
         if seq:out["sequences"] = [seq.to_dict() for seq in self.sequences]
-        if schedules:out["schedules"] = self.schedules
+        if sched:out["schedules"] = self.schedules
         return out
 
     @classmethod
     def from_dict(cls, d:SESSION_DATA_DICT) -> "SessionData":
         return cls(
+            preferences=PreferencesStore.from_dict(d.get("preferences", {})),
             agenda=Agenda.from_dict(d.get("agenda", [])),
             selectedDays=[dateFromDict(dVar) for dVar in d.get( "selected_days", [])], # noqa
             tasks=TasksStore.from_dict(d.get("tasks", {})),

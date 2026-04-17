@@ -1,6 +1,7 @@
 from src.index import API
 from storage.coder import Coder
-from src.storage.datatypes import SessionData, Credentials, TasksStore, Agenda, ENGLISH_SHORT_DAYS
+from src.storage import Storage
+from src.storage.datatypes import Credentials, TasksStore, PreferencesStore, Agenda, ENGLISH_SHORT_DAYS
 from src.storage.saver import MemoryStorage
 from src.gui import UI, PopupMaster, AppRoot
 from src.system_utils.assets import *
@@ -13,54 +14,54 @@ from cryptography.fernet import InvalidToken
 
 class App(UI):
     def __init__(self):
-        self.appPath = Path(get_local_appdata(), "School Scheduler")
-        self.appPath.mkdir(exist_ok=True)
-
-        self.cachePath = Path(user_cache_dir("School Scheduler", "peetaCodes", "0.1.0", ensure_exists=True))
-
-        self.coder = Coder()
         AppRoot.get_root(
-            theme="pulse",
+            themename="pulse",
             iconphoto=IMAGES_DIR / "icon.png",
         )
+        super().__init__()  # initialise the UI daemon
+
+        self.appPath = Path(get_local_appdata(), "School Scheduler")
+        self.cachePath = Path(user_cache_dir("School Scheduler", "peetaCodes", "0.1.0"))
+
+        preferencesDict = MemoryStorage.loadKey("preferences", self.appPath / "data.json", {})
+        Storage.load( # start loading user preferences. Set the rest to default
+            cachePath=self.cachePath,
+            appPath=self.appPath,
+
+            agenda=Agenda(),
+            selectedDays=[],
+            tasks=TasksStore(),
+            daysCoefficients={day: 1.0 for day in ENGLISH_SHORT_DAYS[:5]},
+            schedules={},
+            preferences=PreferencesStore.from_dict(preferencesDict),
+        )
+
+        self.coder = Coder()
 
         #key = self.auth()
-        key = "peeta"
+        key = "peeta" # test key I used to encrypt my credentials during testing. I make the program not ask for it via GUI and hard coded it for testing pourposes.
         try:
             credentials = self.loadCredentials(self.appPath / "credentials.txt", key)
         except InvalidToken:
             self.auth(True) # force re-authentication
             credentials = self.loadCredentials(self.appPath / "credentials.txt", key)
 
-        homework: Agenda = API.getMyHomework(credentials.username, credentials.password)
+        Storage.session().agenda = API.getMyHomework(credentials.username, credentials.password)
 
-        del key         # delete the key for security reasons
-        del credentials # delete the credentials for security reasons
+        del key         # delete the local key object for security reasons
+        del credentials # delete the local credentials object for security reasons
 
-        self.session = SessionData(
-            agenda=homework,
-            selectedDays=[],
-            tasks=TasksStore(),
-            daysCoefficients={},
-            schedules={}
-        )
-        cached_data = MemoryStorage.load(self.cachePath / "session.json", SessionData(daysCoefficients={day:1.0 for day in ENGLISH_SHORT_DAYS[:5]}))
-        self.session.selectedDays = cached_data.selectedDays
-        self.session.daysCoefficients = cached_data.daysCoefficients
-        app_data = MemoryStorage.load(self.appPath / "data.json", SessionData())
-        self.session.tasks = app_data.tasks
-        self.session.schedules = app_data.schedules
+        cached_data = MemoryStorage.load(self.cachePath / "session.json", Storage.session())
+        Storage.session().selectedDays = cached_data.selectedDays
+        Storage.session().daysCoefficients = cached_data.daysCoefficients
 
-        super().__init__(self.session, self.updateSessison)
+        app_data = MemoryStorage.load(self.appPath / "data.json", Storage.session())
+        Storage.session().tasks = app_data.tasks
+        Storage.session().schedules = app_data.schedules
 
+        AppRoot.show() # now reveal the app root
         self.agenda()
         self.window.mainloop()
-
-    def updateSessison(self, session: SessionData):
-        self.session = session
-        MemoryStorage.save(self.cachePath / "session.json", self.session, agenda=False, tasks=False)
-        MemoryStorage.save(self.appPath   / "data.json"  , self.session, agenda=False, selected=False, coeff=False, schedules=True)
-
 
     def auth(self, force: bool = False) -> str:
         status, response = PopupMaster().showAuthenticationPopup(self.appPath / "credentials.txt", force)

@@ -1,13 +1,14 @@
 import sys
-
 import time
 from functools import wraps
+from typing import Type, Container
 
-from typing import Type, Container, Union
+from classeviva.eccezioni import ErroreHTTP404, ErroreHTTP
+AppException = Type[BaseException | ErroreHTTP | ErroreHTTP404]
 
 # decorator to flag API calls that might result in errors, and re-making them in case
 def retry_on(
-    exceptions: Union[Type[BaseException], Container[BaseException]],
+    exceptions: Type[AppException] | Container[AppException],
     *,
     max_attempts: int = 5,
     delay: float = 0.5,
@@ -18,14 +19,12 @@ def retry_on(
         def wrapper(*args, **kwargs):
             attempts = 0
             wait = delay
-
             while True:
                 try:
                     return func(*args, **kwargs)
                 except exceptions:
                     attempts += 1
-                    if attempts >= max_attempts:
-                        raise
+                    if attempts >= max_attempts: raise
                     time.sleep(wait)
                     wait *= backoff
         return wrapper

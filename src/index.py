@@ -9,6 +9,6 @@ class API:
         pass
 
     @classmethod
-    @retry_on((ErroreHTTP404, ErroreHTTP), max_attempts=10)
+    @retry_on((ErroreHTTP404, ErroreHTTP), max_attempts=6)
     def getMyHomework(cls, username: str, password: str) -> Agenda:
         return toAgenda(run(Utente(username, password).agenda()))
