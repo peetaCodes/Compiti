@@ -38,8 +38,7 @@ class App(UI):
 
         self.coder = Coder()
 
-        #key = self.auth()
-        key = "peeta" # test key I used to encrypt my credentials during testing. I make the program not ask for it via GUI and hard coded it for testing pourposes.
+        key = self.auth()
         try:
             credentials = self.loadCredentials(self.appPath / "credentials.txt", key)
         except InvalidToken:
