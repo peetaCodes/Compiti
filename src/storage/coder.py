@@ -58,9 +58,3 @@ class Coder:
         contents: bytes = self.decryptDataFromFile(path, key) # The already decrypted data
         with open(filePath.absolute(), "wb") as file:
             file.write(contents)
-
-if __name__ == '__main__':
-    coder = Coder()
-    password = "peeta"
-    path = Path("/Users/pietrobellizio/PycharmProjects/EmailRelay/credentials.enc")
-    coder.encryptFile(path, password)
