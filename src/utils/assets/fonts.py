@@ -4,6 +4,8 @@ I am sorry, I just couldn't be bothered manually implementing complex logic for 
 
 I am welcome to any pull requests to modify this code to make it better,
 as chatGPT/LLMs-generated code is never that great.
+
+The function "buildAppFonts" was entirely written by me (I know it's not impressive)
 """
 
 from __future__ import annotations
@@ -15,8 +17,17 @@ from pathlib import Path
 from typing import Mapping, Tuple, Dict, Literal, Any
 import tkinter.font as tkFont
 
-from src.system_utils.assets import FONTS
-from src.system_utils.system_screen import Screen
+from src.utils.assets import FONTS
+from src.utils.screen import Screen
+
+# function that builds the font styles uses by the application
+
+def buildAppFonts(fontFamily:str, baseFontSize: int) -> dict[str, str]:
+    return {
+            "err-title": f"{fontFamily} {baseFontSize + 5} bold",
+            "err-body": f"{fontFamily} {baseFontSize - 7} bold",
+            "err-helper": f"{fontFamily} {baseFontSize - 8} italic",
+        }
 
 # Font Loader
 

@@ -5,7 +5,7 @@ I am sorry, I just couldn't be bothered manually implementing complex logic for 
 I am welcome to any pull requests to modify this code to make it better,
 as chatGPT/LLMs-generated code is never that great.
 
-The "Screen" class was created entirely by me, peetaCodes, and has been moved here from the GUI module at src/.
+The "Screen" class was created entirely by me, peetaCodes, and has been moved here from the GUI module at src/gui.py.
 """
 
 import os

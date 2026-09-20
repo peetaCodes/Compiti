@@ -1,0 +1,45 @@
+[project]
+name = "Universal Homework Handler"
+version = "beta0.0.1"
+description = "A program made to scrape homework off of every Italian electronic register with a publically available API and create a custom schedule for you."
+
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+readme = "README.md"
+
+authors = [
+  {name = "peetaCodes", email = "peetaCodes@protonmail.com"}
+]
+maintainers = [
+  {name = "peetaCodes", email = "peetaCodes@protonmail.com"}
+]
+
+requires-python = ">3.12.0"
+dependencies = [
+    "userpaths",
+    "platformdirs",
+    "ttkbootstrap>=1.20.2",
+    "Classeviva.py>=1.2.0",
+    "cryptography>=46.0.0"
+
+]
+
+classifiers = [
+  "Development Status :: 2 - Under construction",
+
+  # Indicate who your project is intended for
+  "Intended Audience :: Sudents",
+  "Topic :: School Homework :: Web Scraping :: Sheduler",
+
+  # Specify the Python versions you support here.
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+Homepage = "https://github.com/peetaCodes/Compiti"
+Repository = "https://github.com/peetaCodes/Compiti"
+Issues = "https://github.com/peetaCodes/Compiti/issues"
+Author = "https://github.com/peetaCodes"

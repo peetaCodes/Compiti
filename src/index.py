@@ -4,7 +4,7 @@ from asyncio import run
 from classeviva import *
 from classeviva.eccezioni import ErroreHTTP404, ErroreHTTP
 
-class API:
+class Client:
     def __init__(self):
         pass
 
