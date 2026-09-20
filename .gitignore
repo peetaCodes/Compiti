@@ -1,0 +1,9 @@
+# created by virtualenv automatically
+.venv
+.venv/*
+
+.idea
+.idea/*
+
+test.*
+ignore.*
