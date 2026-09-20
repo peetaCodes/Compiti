@@ -3,9 +3,9 @@ from json.decoder import JSONDecodeError
 from pathlib import Path
 from os.path import exists
 
-from src.storage.datatypes import SessionData
+from src.storage.datatypes import SessionData, PreferencesStore
 
-from typing import Union, Optional, Any
+from typing import Optional, Any
 
 class FileSystem:
     def __init__(self) -> None:
@@ -28,9 +28,9 @@ class MemoryStorage:
         pass
 
     @classmethod
-    def load(cls, path: Path, default: Optional[Any] = None) -> SessionData | Any:
+    def load(cls, path: Path, default_pref: PreferencesStore, default: Optional[Any] = None) -> SessionData | Any:
         try:
-            return SessionData.from_dict(json.loads(path.absolute().read_text()))
+            return SessionData.from_dict(json.loads(path.absolute().read_text()), default_pref)
         except (JSONDecodeError,FileNotFoundError):
             return default
 
@@ -45,4 +45,4 @@ class MemoryStorage:
     def save(cls, path: Path, data:SessionData, **kwargs) -> None:
         path.touch()
         with open(path.absolute(), "w") as f:
-            json.dump(data.to_dict(**kwargs), f) # noqa
+            json.dump(data.to_dict(**kwargs), f)

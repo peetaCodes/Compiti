@@ -44,7 +44,7 @@ class Coder:
 
     def encryptFile(self, path: Path, password:str):
         key: bytes = self.createKey(path.parent.absolute() / "salt", password)
-        filePath: path = path
+        filePath: Path = path
 
         contents: bytes = self.encryptDataFromFile(path, key) # The already encrypted data
 
@@ -53,14 +53,8 @@ class Coder:
 
     def decryptFile(self, path: Path, password: str):
         key: bytes = self.createKey(path.parent.absolute() / "salt", password)
-        filePath: path = path
+        filePath: Path = path
 
         contents: bytes = self.decryptDataFromFile(path, key) # The already decrypted data
         with open(filePath.absolute(), "wb") as file:
             file.write(contents)
-
-if __name__ == '__main__':
-    coder = Coder()
-    password = "peeta"
-    path = Path("/Users/pietrobellizio/PycharmProjects/EmailRelay/credentials.enc")
-    coder.encryptFile(path, password)

@@ -1,12 +1,13 @@
 """
 NOTE: a single function in this module, `UI.schedule`, was generated with ChatGPT.
 I never intended to keep it as the final version of the function; it was and still is ment merely as a draft.
+It has also received edits by me.
 """
 
 import ttkbootstrap as ttk
 from ttkbootstrap.widgets.scrolled import ScrolledFrame, ScrolledText
 from ttkbootstrap.constants import *
-from ttkbootstrap.utility import enable_high_dpi_awareness
+from ttkbootstrap.utils import enable_high_dpi_awareness
 from tkinter import StringVar, IntVar, DoubleVar
 
 from datetime import date, timedelta
@@ -17,19 +18,19 @@ from calendar import monthrange as last_day_of
 from os.path import exists
 import platform
 
-from typing import Dict, Tuple, List, Callable, Final, Optional, Any, Literal
+from typing import List, Callable, Optional, Any, Literal
 
 from src.storage import Storage
-from src.storage.datatypes import Agenda, Event, Task, TasksStore, RawSequence
-from src.storage.datatypes import ENGLISH_SHORT_DAYS, ITALIAN_DAYS, ENGLISH_TO_ITALIAN_DAYS, ENGLISH_TO_ITALIAN_MONTHS, \
-    ITALIAN_ORDINAL_NUMBERS
-from src.system_utils.system_screen import getScreenInfo
-from src.system_utils.assets.fonts import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
+from src.storage.datatypes import Agenda, Event, Task, TasksStore, PreferencesStore, RawSequence
+from src.utils.formatting import *
+from src.utils.screen import getScreenInfo
+from src.utils.assets.fonts import createFontsForStyle, applyFontsToStyles, applyOptionsToStyles
 from src.algorithm import InputTransformer
 from src.algorithm.scheduler import Scheduler
 from src.exceptions.exceptions import ScheduleError
-from src.system_utils.assets import *
-from system_utils.system_screen import Screen
+from src.utils.assets import *
+from utils.screen import Screen
+from utils.assets.fonts import buildAppFonts
 
 class AppRoot:
     """A singleton-like root manager for ttkbootstrap applications."""
@@ -37,6 +38,9 @@ class AppRoot:
 
     @classmethod
     def _initRoot(cls, **kwargs):
+        if cls._root:
+            return
+
         if platform.system() == "Windows":
             enable_high_dpi_awareness()
 
@@ -54,7 +58,7 @@ class AppRoot:
 
     @classmethod
     def get_root(cls, **kwargs):
-        if cls._root is None:
+        if not cls._root:
             cls._initRoot(**kwargs)
 
         return cls._root
@@ -75,6 +79,21 @@ class AppRoot:
             cls._root.destroy()
             cls._root = None
 
+class Defaults:
+    _defaultTheme = "pulse"
+    _defaultFontFamily = "Arial"
+    _defaultFontSize = 15
+    _defaultScrollSensitivity = 0.1
+
+    @classmethod
+    def defaultPreferences(cls) -> PreferencesStore:
+        return PreferencesStore(
+            theme=cls._defaultTheme,
+            fontFamily=cls._defaultFontFamily,
+            fontSize=cls._defaultFontSize,
+            scrollSensitivity=cls._defaultScrollSensitivity,
+            fonts=buildAppFonts(cls._defaultFontFamily, cls._defaultFontSize),
+        )
 
 class Popup:
     """Base popup handler that ensures a hidden root window exists."""
@@ -432,7 +451,7 @@ class UI(Screen):
 
         task: Task
         for tid, task in tasksStore.items():
-            if task.due_date == day: tasks.add(uid=tid, due_date=task.due_date, effortVar=task.effortVar)
+            if task.dueDate == day: tasks.add(uid=tid, due_date=task.dueDate, effortVar=task.effortVar)
 
         return tasks
 
@@ -598,10 +617,10 @@ class UI(Screen):
 
     def style_root(self) -> Dict[str, Any]:
 
-        print(Storage.session().preferences)
+        #print(Storage.session().preferences)
 
-        family: str = Storage.session().preferences.systemFontFamily
-        baseSize: int = Storage.session().preferences.systemFontSize
+        family: str = Storage.session().preferences.fontFamily
+        baseSize: int = Storage.session().preferences.fontSize
 
         specs: Dict[str, tuple[str, float | int, Literal["normal", "bold"], Literal["roman", "italic"]]] = {
             "task": (family, baseSize + 2, "normal", "roman"),
@@ -832,12 +851,12 @@ class UI(Screen):
                     ttk.Label(inner, text="(no tasks)", font="Punk 10 italic", bootstyle='inverse-secondary').pack(
                         anchor="w", pady=Screen.px(4))  # noqa
                 else:
-                    per_slot_total = sum(float(x.get("units", 0.0)) for x in entries)
+                    #per_slot_total = sum(float(x.get("units", 0.0)) for x in entries)
                     for e in entries:
-                        due_day = int(e["due_day"])
-                        units = float(e.get("units", 0.0))
-                        task_uid_raw = e.get("task_uid")
-                        repaired = bool(e.get("repaired", False))
+                        due_day: int = int(e["due_day"])
+                        units: float | int = float(e.get("units", 0.0))
+                        task_uid_raw: str = e.get("task_uid", "unknown")
+                        repaired: bool = bool(e.get("repaired", False))
 
                         uid_display = str(task_uid_raw) if task_uid_raw is not None else f"frag-{due_day}"
                         total_key = (due_day, uid_display)
@@ -880,13 +899,11 @@ class ToggleButton(ttk.Button):
         self.max_length: Final[int] = max_length
         self.current_style: str = starting_style
 
-        # If the style is dark, disable the button
+        # If the style is dark, disable the button (no action on click)
         if "dark" in self.current_style:
-            action = None
+            self.configure(style=self.current_style)
         else:
-            action = self.on_click
-
-        self.configure(style=self.current_style, command=action)
+            self.configure(style=self.current_style, command=self.on_click)
 
     def on_click(self):
         if len(self.selected_list) == self.max_length and self.current_style != "day.primary.TButton":

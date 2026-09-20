@@ -17,7 +17,7 @@ class Storage: # shared object storing current session data
         cls._appPath = appPath
 
     @classmethod
-    def session(cls, **kwargs):
+    def session(cls):
         return cls._session
 
     @classmethod
